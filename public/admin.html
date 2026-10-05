@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Panel · Florche.Eternas</title>
+<style>
+:root { --p:#A23B72; --p-dark:#7a2b56; --p-soft:#f7e9f1; --bg:#F7F3F6; --ink:#2b1726; --muted:#7a6872; --line:#e5d8e0; --bad:#B3261E; --ok:#2f7a54; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:400 15px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; }
+button,input,select,textarea { font:inherit; color:inherit; }
+button { cursor:pointer; }
+[hidden] { display:none !important; }
+h1,h2,h3 { margin:0; }
+.btn { border:0; border-radius:10px; padding:10px 16px; font-weight:600; background:var(--p); color:#fff; }
+.btn:hover { background:var(--p-dark); }
+.btn.sec { background:#fff; color:var(--p-dark); border:1.5px solid var(--line); }
+.btn.sec:hover { background:var(--p-soft); }
+.btn.danger { background:#fff; color:var(--bad); border:1.5px solid #f0c9c6; }
+.btn.sm { padding:6px 10px; font-size:.85rem; border-radius:8px; }
+.btn[disabled] { opacity:.5; pointer-events:none; }
+input[type=text],input[type=number],input[type=password],input[type=tel],select,textarea {
+  width:100%; border:1.5px solid var(--line); border-radius:9px; padding:9px 11px; background:#fff;
+}
+textarea { resize:vertical; min-height:80px; }
+label.l { display:block; font-weight:600; font-size:.85rem; margin:0 0 4px; }
+.hint { color:var(--muted); font-size:.82rem; margin:4px 0 0; }
+.field { margin-bottom:14px; }
+.card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:600px){ .grid2 { grid-template-columns:1fr; } }
+
+/* Login */
+.login { max-width:380px; margin:12vh auto; padding:0 16px; }
+.login .card { padding:24px; }
+.login h1 { font-size:1.4rem; margin-bottom:4px; }
+.err { color:var(--bad); font-size:.9rem; margin-top:8px; }
+
+/* App */
+.bar { position:sticky; top:0; z-index:20; background:#fff; border-bottom:1px solid var(--line); }
+.bar-top { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 16px; }
+.bar-top h1 { font-size:1.05rem; }
+.tabs { display:flex; gap:4px; padding:0 12px; overflow-x:auto; }
+.tab { border:0; background:none; padding:10px 14px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap; }
+.tab[aria-selected=true] { color:var(--p-dark); border-bottom-color:var(--p); }
+main { max-width:900px; margin:0 auto; padding:16px; }
+.head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+.head h2 { font-size:1.25rem; }
+
+/* Lista de productos */
+.prow { display:flex; align-items:center; gap:12px; padding:10px; background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:8px; }
+.prow .th { width:56px; height:56px; border-radius:9px; background:#efe5ec; overflow:hidden; flex:none; display:grid; place-items:center; color:#c9b3c1; font-size:1.4rem; }
+.prow .th img { width:100%; height:100%; object-fit:cover; }
+.prow .info { flex:1; min-width:0; }
+.prow .info b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.prow .info small { color:var(--muted); }
+.badge { display:inline-block; font-size:.72rem; font-weight:700; padding:2px 8px; border-radius:99px; background:#eee; color:#666; margin-left:6px; }
+.badge.ok { background:#e3f3ea; color:var(--ok); }
+.acts { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+
+/* Modal */
+.modal { position:fixed; inset:0; z-index:50; background:rgba(30,10,25,.55); display:flex; align-items:flex-end; justify-content:center; }
+@media (min-width:700px){ .modal { align-items:center; } }
+.mbox { background:var(--bg); width:min(820px,100%); max-height:94vh; display:flex; flex-direction:column; border-radius:18px 18px 0 0; overflow:hidden; }
+@media (min-width:700px){ .mbox { border-radius:18px; } }
+.mhead { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:#fff; border-bottom:1px solid var(--line); }
+.mbody { overflow-y:auto; padding:16px; flex:1; }
+.mfoot { display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; background:#fff; border-top:1px solid var(--line); }
+.imgs { display:flex; gap:8px; flex-wrap:wrap; }
+.imgs .im { position:relative; width:84px; height:84px; border-radius:10px; overflow:hidden; border:2px solid var(--line); }
+.imgs .im.main { border-color:var(--p); }
+.imgs img { width:100%; height:100%; object-fit:cover; }
+.imgs .x { position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%; border:0; background:rgba(255,255,255,.95); font-weight:700; line-height:1; }
+.imgs .mk { position:absolute; left:0; right:0; bottom:0; border:0; background:rgba(0,0,0,.55); color:#fff; font-size:.68rem; padding:2px 0; }
+.imgs .add { width:84px; height:84px; border-radius:10px; border:2px dashed var(--line); background:#fff; color:var(--muted); font-size:.8rem; }
+.gcard { background:#fff; border:1.5px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+.ghead { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+.ghead > input { flex:1 1 180px; min-width:0; }
+.gbtns { display:flex; gap:4px; flex:none; }
+.opt { display:grid; grid-template-columns:34px 1fr 110px 30px; gap:8px; align-items:center; margin-bottom:6px; }
+.opt input[type=color] { width:34px; height:34px; padding:0; border:1.5px solid var(--line); border-radius:8px; background:#fff; }
+.opt .nocolor { width:34px; height:34px; border:1.5px dashed var(--line); border-radius:8px; background:#fff; color:var(--muted); font-size:.7rem; line-height:1.1; padding:0; }
+.opt .price { position:relative; }
+.opt .price span { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:.85rem; pointer-events:none; }
+.opt .price input { padding-left:26px; }
+.opt .rm { border:0; background:none; color:var(--bad); font-size:1.1rem; }
+.opthead { display:grid; grid-template-columns:34px 1fr 110px 30px; gap:8px; font-size:.75rem; color:var(--muted); margin-bottom:4px; }
+.chk { display:flex; align-items:center; gap:6px; font-weight:600; font-size:.88rem; }
+.chk input { width:18px; height:18px; accent-color:var(--p); }
+.note { background:var(--p-soft); border-radius:10px; padding:10px 12px; font-size:.85rem; margin:8px 0 12px; }
+
+/* Tabla de códigos postales */
+.tw { overflow-x:auto; background:#fff; border:1px solid var(--line); border-radius:12px; }
+table { width:100%; border-collapse:collapse; font-size:.9rem; }
+th,td { padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); vertical-align:middle; }
+th { font-size:.78rem; color:var(--muted); background:#faf6f9; }
+td input[type=number] { width:90px; padding:6px 8px; }
+.tag { font-size:.7rem; font-weight:700; padding:2px 7px; border-radius:99px; background:#e8eef9; color:#2d4f8f; }
+.tag.man { background:#fff0d6; color:#8a5a00; }
+.toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#2b1726; color:#fff; padding:10px 18px; border-radius:99px; z-index:90; opacity:0; pointer-events:none; transition:.25s; max-width:90vw; text-align:center; }
+.toast.show { opacity:1; }
+.toast.bad { background:var(--bad); }
+.logo-prev { max-height:64px; border-radius:8px; border:1px solid var(--line); background:#fff; padding:4px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<section class="login" id="login" hidden>
+  <div class="card">
+    <h1>Panel de Florche.Eternas</h1>
+    <p class="hint" style="margin:0 0 16px">Ingresá con tu contraseña de administradora.</p>
+    <div class="field"><label class="l" for="pw">Contraseña</label><input id="pw" type="password" autocomplete="current-password"></div>
+    <button class="btn" id="loginBtn" style="width:100%">Entrar</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</section>
+
+<!-- APP -->
+<div id="app" hidden>
+  <div class="bar">
+    <div class="bar-top">
+      <h1>Panel · <span id="barName">Florche.Eternas</span></h1>
+      <div class="row"><a class="btn sec sm" href="/" target="_blank" style="text-decoration:none">Ver tienda</a><button class="btn sec sm" id="logout">Salir</button></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="products">Productos</button>
+      <button class="tab" role="tab" data-tab="categories">Categorías</button>
+      <button class="tab" role="tab" data-tab="shipping">Envíos</button>
+      <button class="tab" role="tab" data-tab="store">Mi tienda</button>
+    </div>
+  </div>
+  <main id="view"></main>
+</div>
+
+<div class="modal" id="modal" hidden></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const money = (n) => '$ ' + Math.round(Number(n) || 0).toLocaleString('es-AR');
+const rid = () => Math.random().toString(16).slice(2, 10);
+
+let token = localStorage.getItem('fl_admin') || '';
+let data = { settings: {}, categories: [], products: [] };
+let postal = [];
+let tab = 'products';
+let ed = null;      // producto en edición
+let edId = null;    // id del producto en edición (null = nuevo)
+
+/* ---------- API ---------- */
+async function api(url, { method = 'GET', body } = {}) {
+  const r = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  let j = {};
+  try { j = await r.json(); } catch {}
+  if (r.status === 401 && token) { logout(); throw new Error(j.error || 'Sesión vencida'); }
+  if (!r.ok) throw new Error(j.error || 'Algo salió mal');
+  return j;
+}
+let tt;
+function toast(msg, bad) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(tt);
+  tt = setTimeout(() => (t.className = 'toast'), bad ? 4500 : 2400);
+}
+const run = async (fn, okMsg) => {
+  try { const r = await fn(); if (okMsg) toast(okMsg); return r; }
+  catch (e) { toast(e.message, true); }
+};
+
+/* ---------- Login ---------- */
+function logout() {
+  token = '';
+  localStorage.removeItem('fl_admin');
+  $('#app').hidden = true;
+  $('#login').hidden = false;
+}
+async function doLogin() {
+  $('#loginErr').textContent = '';
+  try {
+    const r = await api('/api/admin/login', { method: 'POST', body: { password: $('#pw').value } });
+    token = r.token;
+    localStorage.setItem('fl_admin', token);
+    $('#pw').value = '';
+    start();
+  } catch (e) { $('#loginErr').textContent = e.message; }
+}
+$('#loginBtn').onclick = doLogin;
+$('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+$('#logout').onclick = logout;
+
+async function start() {
+  try {
+    data = await api('/api/admin/store');
+  } catch { return; }
+  $('#login').hidden = true;
+  $('#app').hidden = false;
+  $('#barName').textContent = data.settings.storeName;
+  setTab(tab);
+}
+async function refresh() { data = await api('/api/admin/store'); $('#barName').textContent = data.settings.storeName; }
+
+document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
+function setTab(t) {
+  tab = t;
+  document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === t));
+  ({ products: viewProducts, categories: viewCategories, shipping: viewShipping, store: viewStore })[t]();
+}
+
+/* ---------- Imágenes ---------- */
+function readImage(file, max, type, quality) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => reject(new Error('Esa imagen no se pudo abrir'));
+      im.onload = () => {
+        const k = Math.min(1, max / Math.max(im.width, im.height));
+        const w = Math.round(im.width * k), h = Math.round(im.height * k);
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+        ctx.drawImage(im, 0, 0, w, h);
+        resolve(c.toDataURL(type, quality));
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function uploadImage(file, { max = 1100, png = false } = {}) {
+  const dataUrl = await readImage(file, max, png ? 'image/png' : 'image/jpeg', 0.82);
+  return (await api('/api/admin/upload', { method: 'POST', body: { dataUrl } })).id;
+}
+
+/* ---------- Productos ---------- */
+const catName = (id) => (data.categories.find((c) => c.id === id) || {}).name || 'Sin categoría';
+
+function viewProducts() {
+  const list = data.products.map((p, i) => `
+    <div class="prow">
+      <div class="th">${p.images[0] ? `<img src="/img/${p.images[0]}" alt="">` : '✿'}</div>
+      <div class="info"><b>${esc(p.name)}${p.active ? '' : '<span class="badge">Oculto</span>'}</b>
+        <small>${esc(catName(p.category_id))} · base ${money(p.base_price)} · ${p.groups.length} opción(es)</small></div>
+      <div class="acts">
+        <button class="btn sec sm" data-a="up" data-i="${i}" ${i === 0 ? 'disabled' : ''} title="Subir">↑</button>
+        <button class="btn sec sm" data-a="down" data-i="${i}" ${i === data.products.length - 1 ? 'disabled' : ''} title="Bajar">↓</button>
+        <button class="btn sec sm" data-a="edit" data-id="${p.id}">Editar</button>
+        <button class="btn sec sm" data-a="dup" data-id="${p.id}">Duplicar</button>
+        <button class="btn danger sm" data-a="del" data-id="${p.id}">Borrar</button>
+      </div>
+    </div>`).join('');
+  $('#view').innerHTML = `
+    <div class="head"><h2>Productos</h2><button class="btn" data-a="new">+ Nuevo producto</button></div>
+    ${list || '<div class="card">Todavía no cargaste productos. Tocá “Nuevo producto”.</div>'}`;
+}
+
+async function moveItem(table, arr, i, d, after) {
+  const j = i + d;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  await run(() => api('/api/admin/reorder', { method: 'PUT', body: { table, ids: arr.map((x) => x.id) } }));
+  after();
+}
+
+const blankProduct = () => ({ name: '', description: '', base_price: 0, category_id: data.categories[0] ? data.categories[0].id : null, images: [], groups: [], active: true });
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+function openEditor(p, id) {
+  ed = clone(p);
+  edId = id;
+  renderEditor();
+  $('#modal').hidden = false;
+}
+function closeEditor() { $('#modal').hidden = true; $('#modal').innerHTML = ''; ed = null; }
+
+const TYPE_LABEL = { single: 'Elegir una opción', multi: 'Elegir varias', quantity: 'Cantidad de cada una' };
+
+function renderEditor() {
+  const scroll = $('#modal .mbody') ? $('#modal .mbody').scrollTop : 0;
+  const groups = ed.groups.map((g, gi) => groupHtml(g, gi)).join('');
+  $('#modal').innerHTML = `
+  <div class="mbox">
+    <div class="mhead"><h3>${edId ? 'Editar producto' : 'Nuevo producto'}</h3><button class="btn sec sm" data-m="close">Cerrar</button></div>
+    <div class="mbody">
+      <div class="card">
+        <div class="field"><label class="l">Nombre</label><input type="text" data-path="name" value="${esc(ed.name)}" placeholder="Ej: Ramo de 3 flores"></div>
+        <div class="grid2">
+          <div class="field"><label class="l">Categoría</label>
+            <select data-path="category_id" data-num="1"><option value="">Sin categoría</option>${data.categories.map((c) => `<option value="${c.id}" ${c.id === ed.category_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+          <div class="field"><label class="l">Precio base ($)</label><input type="number" min="0" step="any" data-path="base_price" value="${esc(ed.base_price)}">
+            <p class="hint">Es lo que cuesta el producto sin elegir nada. Cada opción suma su precio.</p></div>
+        </div>
+        <div class="field"><label class="l">Descripción</label><textarea data-path="description">${esc(ed.description)}</textarea></div>
+        <label class="chk"><input type="checkbox" data-path="active" data-type="check" ${ed.active ? 'checked' : ''}> Mostrar en la tienda</label>
+      </div>
+
+      <div class="card">
+        <label class="l">Fotos</label>
+        <div class="imgs">
+          ${ed.images.map((id, i) => `<div class="im ${i === 0 ? 'main' : ''}"><img src="/img/${id}" alt=""><button class="x" data-m="rmimg" data-i="${i}" aria-label="Quitar">×</button>${i === 0 ? '<span class="mk" style="background:var(--p)">Principal</span>' : `<button class="mk" data-m="mainimg" data-i="${i}">Hacer principal</button>`}</div>`).join('')}
+          <button class="add" data-m="addimg">+ Foto</button>
+        </div>
+        <input type="file" id="edFile" accept="image/*" multiple hidden>
+      </div>
+
+      <div class="head" style="margin-top:6px"><h3>Opciones que elige el cliente</h3></div>
+      <div class="note">Acá armás lo que el cliente puede elegir: estilo de flor, colores, envoltorio, cantidad de flores, etc. Cada opción puede sumar un precio. Si una opción es “Elegir una”, podés pedir que se repita (por ejemplo 3 veces, una por cada flor del ramo).</div>
+      ${groups}
+      <button class="btn sec" data-m="addgroup">+ Agregar una opción al producto</button>
+    </div>
+    <div class="mfoot"><button class="btn sec" data-m="close">Cancelar</button><button class="btn" data-m="save">Guardar producto</button></div>
+  </div>`;
+  const mb = $('#modal .mbody');
+  if (mb) mb.scrollTop = scroll;
+}
+
+function groupHtml(g, gi) {
+  const p = `groups.${gi}`;
+  const opts = g.options.map((o, oi) => `
+    <div class="opt">
+      ${o.color
+        ? `<input type="color" data-path="${p}.options.${oi}.color" value="${esc(o.color)}" title="Color (tocá para cambiar)">`
+        : `<button class="nocolor" data-m="addcolor" data-gi="${gi}" data-oi="${oi}" title="Agregar color de muestra">+ color</button>`}
+      <input type="text" data-path="${p}.options.${oi}.name" value="${esc(o.name)}" placeholder="Nombre">
+      <div class="price"><span>+$</span><input type="number" step="any" data-path="${p}.options.${oi}.price" value="${esc(o.price)}"></div>
+      <button class="rm" data-m="rmopt" data-gi="${gi}" data-oi="${oi}" title="Quitar">×</button>
+    </div>`).join('');
+  return `
+  <div class="gcard">
+    <div class="ghead">
+      <input type="text" data-path="${p}.name" value="${esc(g.name)}" placeholder="Ej: Color de la flor">
+      <div class="gbtns">
+        <button class="btn sec sm" data-m="gup" data-gi="${gi}" ${gi === 0 ? 'disabled' : ''}>↑</button>
+        <button class="btn sec sm" data-m="gdown" data-gi="${gi}" ${gi === ed.groups.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="btn sec sm" data-m="gdup" data-gi="${gi}">Duplicar</button>
+        <button class="btn danger sm" data-m="gdel" data-gi="${gi}">Borrar</button>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div style="min-width:200px;flex:1"><select data-path="${p}.type" data-rerender="1">${Object.entries(TYPE_LABEL).map(([k, v]) => `<option value="${k}" ${g.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      <label class="chk"><input type="checkbox" data-path="${p}.required" data-type="check" ${g.required ? 'checked' : ''}> Obligatorio</label>
+    </div>
+    ${g.type === 'single' ? `
+    <div class="grid2" style="margin-bottom:6px">
+      <div><label class="l">¿Cuántas veces se elige?</label><input type="number" min="1" max="30" data-path="${p}.repeat" value="${esc(g.repeat || 1)}"><p class="hint">Ramo de 3 flores → 3</p></div>
+      <div><label class="l">Cómo se llama cada una</label><input type="text" data-path="${p}.repeatLabel" value="${esc(g.repeatLabel)}" placeholder="Flor"><p class="hint">Solo si se repite. Ej: Flor 1, Flor 2…</p></div>
+    </div>` : ''}
+    ${g.type === 'multi' ? `<div class="field" style="max-width:240px"><label class="l">Máximo a elegir (opcional)</label><input type="number" min="1" data-path="${p}.max" value="${esc(g.max ?? '')}"></div>` : ''}
+    ${g.type === 'quantity' ? '<p class="hint" style="margin:0 0 8px">El cliente elige cuántas quiere de cada una. Cada unidad suma su precio (ej: “Flor extra +$2500”).</p>' : ''}
+    <div class="opthead"><span></span><span>Opción</span><span>Suma al precio</span><span></span></div>
+    ${opts || '<p class="hint">Todavía no hay opciones.</p>'}
+    <div class="row" style="margin-top:8px">
+      <button class="btn sec sm" data-m="addopt" data-gi="${gi}">+ Agregar opción</button>
+      <button class="btn sec sm" data-m="bulkopt" data-gi="${gi}">+ Agregar varias a la vez</button>
+    </div>
+  </div>`;
+}
+
+const COLOR_MAP = {
+  rojo:'#C62828', rosa:'#F48FB1', fucsia:'#D81B60', lila:'#B39DDB', violeta:'#7E57C2', azul:'#1E4FA3', celeste:'#81D4FA',
+  verde:'#43A047', 'verde agua':'#80CBC4', amarillo:'#FDD835', naranja:'#FB8C00', blanco:'#FFFFFF', negro:'#212121',
+  dorado:'#C9A227', plateado:'#B0B7BD', bordo:'#7B1E3A', beige:'#E8D8C3', crema:'#F5EBD7', salmon:'#FA8072',
+  turquesa:'#26C6DA', marron:'#6D4C41', gris:'#9E9E9E', coral:'#FF7F6E', mostaza:'#D9A520', 'rosa viejo':'#C99AA5',
+  bordeaux:'#7B1E3A', purpura:'#7B1FA2', 'azul marino':'#1A2A55', mint:'#A5D6A7', menta:'#A5D6A7', durazno:'#FFCBA4', champagne:'#EBD9B4',
+};
+const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+function setPath(obj, path, value) {
+  const keys = path.split('.');
+  let o = obj;
+  for (let i = 0; i < keys.length - 1; i++) o = o[keys[i]];
+  o[keys[keys.length - 1]] = value;
+}
+
+// Edición de campos del producto (sin redibujar para no perder el foco)
+function onEditorInput(e) {
+  const t = e.target;
+  if (!t.dataset || !t.dataset.path || !ed) return;
+  let v;
+  if (t.dataset.type === 'check') v = t.checked;
+  else if (t.dataset.num) v = t.value === '' ? null : Number(t.value);
+  else v = t.value;
+  setPath(ed, t.dataset.path, v);
+  if (t.dataset.rerender && e.type === 'change') renderEditor();
+}
+
+async function onEditorClick(e) {
+  const b = e.target.closest('[data-m]');
+  if (!b || !ed) return;
+  const m = b.dataset.m;
+  const gi = +b.dataset.gi, oi = +b.dataset.oi, i = +b.dataset.i;
+  if (m === 'close') return closeEditor();
+  if (m === 'save') return saveProduct();
+  if (m === 'addimg') return $('#edFile').click();
+  if (m === 'rmimg') ed.images.splice(i, 1);
+  else if (m === 'mainimg') ed.images.unshift(ed.images.splice(i, 1)[0]);
+  else if (m === 'addgroup') ed.groups.push({ id: rid(), name: '', type: 'single', required: true, repeat: 1, repeatLabel: '', max: null, options: [{ id: rid(), name: '', price: 0, color: '' }] });
+  else if (m === 'gup' && gi > 0) [ed.groups[gi - 1], ed.groups[gi]] = [ed.groups[gi], ed.groups[gi - 1]];
+  else if (m === 'gdown' && gi < ed.groups.length - 1) [ed.groups[gi + 1], ed.groups[gi]] = [ed.groups[gi], ed.groups[gi + 1]];
+  else if (m === 'gdup') { const c = clone(ed.groups[gi]); c.id = rid(); c.options.forEach((o) => (o.id = rid())); c.name += ' (copia)'; ed.groups.splice(gi + 1, 0, c); }
+  else if (m === 'gdel') { if (!confirm('¿Borrar esta opción del producto?')) return; ed.groups.splice(gi, 1); }
+  else if (m === 'addopt') ed.groups[gi].options.push({ id: rid(), name: '', price: 0, color: '' });
+  else if (m === 'rmopt') ed.groups[gi].options.splice(oi, 1);
+  else if (m === 'addcolor') ed.groups[gi].options[oi].color = '#cccccc';
+  else if (m === 'bulkopt') {
+    const txt = prompt('Escribí los nombres separados por coma.\nEj: Rojo, Rosa, Fucsia, Lila, Celeste\n(Si son colores comunes, les pongo la muestra de color solos).');
+    if (!txt) return;
+    ed.groups[gi].options = ed.groups[gi].options.filter((o) => o.name.trim());
+    txt.split(',').map((s) => s.trim()).filter(Boolean).forEach((name) => {
+      ed.groups[gi].options.push({ id: rid(), name, price: 0, color: COLOR_MAP[norm(name)] || '' });
+    });
+  } else return;
+  renderEditor();
+}
+
+async function saveProduct() {
+  if (!ed.name.trim()) return toast('Poné un nombre al producto', true);
+  const body = clone(ed);
+  body.base_price = Number(body.base_price) || 0;
+  body.groups.forEach((g) => {
+    g.options = g.options.filter((o) => String(o.name).trim());
+    g.options.forEach((o) => { o.price = Number(o.price) || 0; });
+    g.repeat = Math.max(1, parseInt(g.repeat, 10) || 1);
+  });
+  const ok = await run(async () => {
+    if (edId) await api('/api/admin/products/' + edId, { method: 'PUT', body });
+    else await api('/api/admin/products', { method: 'POST', body });
+    await refresh();
+    return true;
+  }, 'Producto guardado');
+  if (ok) { closeEditor(); viewProducts(); }
+}
+
+$('#modal').addEventListener('input', onEditorInput);
+$('#modal').addEventListener('change', async (e) => {
+  if (e.target.id === 'edFile') {
+    const files = [...e.target.files];
+    if (!files.length) return;
+    toast('Subiendo fotos…');
+    for (const f of files) {
+      try { ed.images.push(await uploadImage(f)); } catch (err) { toast(err.message, true); }
+    }
+    renderEditor();
+    return;
+  }
+  onEditorInput(e);
+});
+$('#modal').addEventListener('click', onEditorClick);
+
+/* ---------- Categorías ---------- */
+function viewCategories() {
+  $('#view').innerHTML = `
+    <div class="head"><h2>Categorías</h2></div>
+    <div class="card">
+      ${data.categories.map((c, i) => `
+        <div class="row" style="margin-bottom:8px;flex-wrap:nowrap">
+          <input type="text" value="${esc(c.name)}" data-a="ren" data-id="${c.id}">
+          <button class="btn sec sm" data-a="cup" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button class="btn sec sm" data-a="cdown" data-i="${i}" ${i === data.categories.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="btn danger sm" data-a="cdel" data-id="${c.id}">Borrar</button>
+        </div>`).join('') || '<p class="hint">Todavía no hay categorías.</p>'}
+      <div class="row" style="margin-top:12px;flex-wrap:nowrap"><input type="text" id="newCat" placeholder="Nueva categoría (ej: Ramos, Flores sueltas, Cajas…)"><button class="btn" data-a="cadd">Agregar</button></div>
+      <p class="hint">Los cambios de nombre se guardan solos al salir del campo. Si borrás una categoría, sus productos quedan en “Otros”.</p>
+    </div>`;
+}
+
+/* ---------- Envíos ---------- */
+function estCost(km) {
+  const s = data.settings;
+  let c = Number(s.shippingBase) + km * Number(s.kmMultiplier) * Number(s.pricePerKm);
+  c = Math.max(c, Number(s.shippingMin));
+  const r = Number(s.shippingRound) || 0;
+  if (r > 0) c = Math.round(c / r) * r;
+  return Math.round(c);
+}
+
+async function viewShipping() {
+  const s = data.settings;
+  $('#view').innerHTML = `
+    <div class="head"><h2>Envíos</h2></div>
+    <div class="card" id="shipForm">
+      <p class="hint" style="margin:0 0 12px">El sistema busca solo la distancia en km entre tu código postal y el del cliente (solo Mendoza), y multiplica por el valor que pongas acá.</p>
+      <div class="grid2">
+        <div class="field"><label class="l">Tu código postal (desde dónde salen los envíos)</label><input type="text" inputmode="numeric" maxlength="4" data-s="originCP" value="${esc(s.originCP)}"></div>
+        <div class="field"><label class="l">Precio por kilómetro ($)</label><input type="number" min="0" step="any" data-s="pricePerKm" value="${esc(s.pricePerKm)}"></div>
+        <div class="field"><label class="l">Costo fijo extra por envío ($)</label><input type="number" min="0" step="any" data-s="shippingBase" value="${esc(s.shippingBase)}"><p class="hint">Se suma siempre. Dejalo en 0 si no querés.</p></div>
+        <div class="field"><label class="l">Envío mínimo ($)</label><input type="number" min="0" step="any" data-s="shippingMin" value="${esc(s.shippingMin)}"><p class="hint">Aunque el cliente esté muy cerca, se cobra al menos esto.</p></div>
+        <div class="field"><label class="l">Redondear a ($)</label><input type="number" min="0" step="any" data-s="shippingRound" value="${esc(s.shippingRound)}"><p class="hint">Ej: 50 → el envío queda en múltiplos de $50.</p></div>
+        <div class="field"><label class="l">Km a cobrar</label>
+          <select data-s="kmMultiplier"><option value="1" ${Number(s.kmMultiplier) === 1 ? 'selected' : ''}>Solo ida</option><option value="2" ${Number(s.kmMultiplier) === 2 ? 'selected' : ''}>Ida y vuelta (x2)</option></select></div>
+      </div>
+      <label class="chk" style="margin-bottom:10px"><input type="checkbox" data-s="allowPickup" ${s.allowPickup ? 'checked' : ''}> Ofrecer retiro en persona (sin costo)</label>
+      <div class="field"><label class="l">Texto del retiro</label><input type="text" data-s="pickupText" value="${esc(s.pickupText)}"></div>
+      <div class="field"><label class="l">Aviso debajo del costo de envío</label><input type="text" data-s="shippingNote" value="${esc(s.shippingNote)}"></div>
+      <button class="btn" data-a="saveship">Guardar envíos</button>
+    </div>
+
+    <div class="head" style="margin-top:20px"><h2 style="font-size:1.1rem">Códigos postales y distancias</h2><button class="btn sec sm" data-a="refreshpostal">Actualizar lista</button></div>
+    <div class="card">
+      <div class="row" style="flex-wrap:nowrap"><input type="text" inputmode="numeric" maxlength="4" id="newCp" placeholder="Código postal, ej: 5539"><button class="btn" data-a="addcp">Calcular</button></div>
+      <p class="hint">Cuando un cliente escribe un código nuevo, el sistema lo busca solo y lo guarda acá. Podés agregar los más comunes de antemano o corregir los km a mano.</p>
+      <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">Agregar muchos de una vez</summary>
+        <textarea id="bulkCp" placeholder="5500, 5539, 5550, 5519…" style="margin-top:8px"></textarea>
+        <button class="btn sec sm" data-a="bulkcp" style="margin-top:8px">Calcular todos</button>
+        <p class="hint">Se calculan de a uno (unos segundos cada uno). Tocá “Actualizar lista” en un rato para ver los resultados.</p>
+      </details>
+    </div>
+    <div id="postalTable"><p class="hint">Cargando…</p></div>`;
+  loadPostal();
+}
+
+async function loadPostal() {
+  const r = await run(() => api('/api/admin/postal'));
+  if (!r) return;
+  postal = r.rows;
+  const el = $('#postalTable');
+  if (!el) return;
+  el.innerHTML = postal.length ? `
+    <div class="tw"><table>
+      <thead><tr><th>CP</th><th>Lugar encontrado</th><th>Km</th><th>Envío</th><th></th></tr></thead>
+      <tbody>${postal.map((r) => `
+        <tr>
+          <td><b>${esc(r.cp)}</b> ${r.manual ? '<span class="tag man">a mano</span>' : r.km !== null ? '<span class="tag">auto</span>' : ''}</td>
+          <td>${r.lat ? `<a href="https://www.google.com/maps?q=${r.lat},${r.lon}" target="_blank" rel="noopener">${esc(r.label || 'Ver en mapa')}</a>` : '<span class="hint">—</span>'}</td>
+          <td><input type="number" min="0" step="0.1" value="${r.km ?? ''}" placeholder="?" data-a="setkm" data-cp="${esc(r.cp)}"></td>
+          <td>${r.km !== null ? money(estCost(r.km)) : '—'}</td>
+          <td><div class="acts"><button class="btn sec sm" data-a="recalc" data-cp="${esc(r.cp)}">Recalcular</button><button class="btn danger sm" data-a="delcp" data-cp="${esc(r.cp)}">×</button></div></td>
+        </tr>`).join('')}</tbody></table></div>`
+    : '<div class="card"><p class="hint" style="margin:0">Todavía no hay códigos cargados. Se van agregando solos a medida que tus clientes cotizan.</p></div>';
+}
+
+/* ---------- Mi tienda ---------- */
+function viewStore() {
+  const s = data.settings;
+  const f = (k, label, extra = '', hint = '') => `<div class="field"><label class="l">${label}</label><input type="text" data-s="${k}" value="${esc(s[k])}" ${extra}>${hint ? `<p class="hint">${hint}</p>` : ''}</div>`;
+  $('#view').innerHTML = `
+    <div class="head"><h2>Mi tienda</h2></div>
+    <div class="card" id="storeForm">
+      ${f('storeName', 'Nombre de la tienda')}
+      ${f('tagline', 'Frase corta (aparece en el buscador)')}
+      ${f('heroTitle', 'Título grande de la portada')}
+      <div class="field"><label class="l">Texto debajo del título</label><textarea data-s="heroSubtitle">${esc(s.heroSubtitle)}</textarea></div>
+      <div class="field"><label class="l">Sobre vos / tu emprendimiento</label><textarea data-s="about">${esc(s.about)}</textarea></div>
+      ${f('whatsapp', 'Tu WhatsApp (adonde llegan los pedidos)', 'inputmode="tel"', 'Con código de país, sin + ni espacios ni 0 ni 15. Ejemplo celular de Mendoza: 5492614567890')}
+      ${f('instagram', 'Instagram (usuario o link)', '', 'Ej: florche.eternas')}
+      ${f('footerText', 'Texto al pie de la página')}
+      <div class="field"><label class="l">Primer mensaje del pedido por WhatsApp</label><input type="text" data-s="orderIntro" value="${esc(s.orderIntro)}"></div>
+      <div class="field"><label class="l">Color principal</label><div class="row"><input type="color" data-s="primaryColor" value="${esc(s.primaryColor)}" style="width:60px;height:40px;padding:2px;border:1.5px solid var(--line);border-radius:9px"><span class="hint">Cambia botones, cinta y detalles de toda la tienda.</span></div></div>
+      <div class="field"><label class="l">Logo (opcional)</label>
+        <div class="row">${s.logoId ? `<img class="logo-prev" src="/img/${s.logoId}" alt="">` : ''}
+        <button class="btn sec sm" data-a="logo">${s.logoId ? 'Cambiar logo' : 'Subir logo'}</button>${s.logoId ? '<button class="btn danger sm" data-a="rmlogo">Quitar</button>' : ''}</div>
+        <input type="file" id="logoFile" accept="image/*" hidden></div>
+      <div class="field"><label class="l">Foto de la portada (opcional)</label>
+        <div class="row">${s.heroImageId ? `<img class="logo-prev" src="/img/${s.heroImageId}" alt="">` : ''}
+        <button class="btn sec sm" data-a="hero">${s.heroImageId ? 'Cambiar foto' : 'Subir foto'}</button>${s.heroImageId ? '<button class="btn danger sm" data-a="rmhero">Quitar</button>' : ''}</div>
+        <input type="file" id="heroFile" accept="image/*" hidden></div>
+      <button class="btn" data-a="savestore">Guardar cambios</button>
+    </div>`;
+  $('#logoFile').onchange = (e) => setImageSetting(e, 'logoId', { max: 400, png: true });
+  $('#heroFile').onchange = (e) => setImageSetting(e, 'heroImageId', { max: 1000 });
+}
+async function setImageSetting(e, key, opts) {
+  const f = e.target.files[0];
+  if (!f) return;
+  toast('Subiendo…');
+  await run(async () => {
+    const id = await uploadImage(f, opts);
+    await api('/api/admin/settings', { method: 'PUT', body: { [key]: id } });
+    await refresh();
+    viewStore();
+  }, 'Listo');
+}
+function collect(sel) {
+  const out = {};
+  document.querySelectorAll(sel + ' [data-s]').forEach((el) => {
+    out[el.dataset.s] = el.type === 'checkbox' ? el.checked : el.value;
+  });
+  return out;
+}
+
+/* ---------- Eventos de la vista ---------- */
+$('#view').addEventListener('change', async (e) => {
+  const t = e.target;
+  if (t.dataset.a === 'ren') {
+    await run(() => api('/api/admin/categories/' + t.dataset.id, { method: 'PUT', body: { name: t.value } }), 'Guardado');
+    await refresh();
+  } else if (t.dataset.a === 'setkm') {
+    if (t.value === '') return;
+    await run(() => api('/api/admin/postal/' + t.dataset.cp, { method: 'PUT', body: { km: t.value } }), 'Km guardados');
+    loadPostal();
+  }
+});
+
+$('#view').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-a]');
+  if (!b || b.tagName === 'INPUT') return;
+  const a = b.dataset.a;
+  const id = +b.dataset.id, i = +b.dataset.i;
+
+  // Productos
+  if (a === 'new') return openEditor(blankProduct(), null);
+  if (a === 'edit') return openEditor(data.products.find((p) => p.id === id), id);
+  if (a === 'dup') {
+    const p = clone(data.products.find((x) => x.id === id));
+    p.name += ' (copia)';
+    await run(async () => { await api('/api/admin/products', { method: 'POST', body: p }); await refresh(); }, 'Producto duplicado');
+    return viewProducts();
+  }
+  if (a === 'del') {
+    if (!confirm('¿Borrar este producto? No se puede deshacer.')) return;
+    await run(async () => { await api('/api/admin/products/' + id, { method: 'DELETE' }); await refresh(); }, 'Producto borrado');
+    return viewProducts();
+  }
+  if (a === 'up' || a === 'down') return moveItem('products', data.products, i, a === 'up' ? -1 : 1, viewProducts);
+
+  // Categorías
+  if (a === 'cadd') {
+    const name = $('#newCat').value.trim();
+    if (!name) return toast('Escribí un nombre', true);
+    await run(async () => { await api('/api/admin/categories', { method: 'POST', body: { name } }); await refresh(); }, 'Categoría creada');
+    return viewCategories();
+  }
+  if (a === 'cdel') {
+    if (!confirm('¿Borrar esta categoría? Sus productos quedan sin categoría.')) return;
+    await run(async () => { await api('/api/admin/categories/' + id, { method: 'DELETE' }); await refresh(); }, 'Categoría borrada');
+    return viewCategories();
+  }
+  if (a === 'cup' || a === 'cdown') return moveItem('categories', data.categories, i, a === 'cup' ? -1 : 1, viewCategories);
+
+  // Envíos
+  if (a === 'saveship') {
+    const body = collect('#shipForm');
+    await run(async () => { await api('/api/admin/settings', { method: 'PUT', body }); await refresh(); }, 'Envíos guardados');
+    return viewShipping();
+  }
+  if (a === 'refreshpostal') return loadPostal();
+  if (a === 'addcp') {
+    const cp = $('#newCp').value.trim();
+    toast('Buscando ' + cp + '… puede tardar unos segundos');
+    b.disabled = true;
+    await run(() => api('/api/admin/postal', { method: 'POST', body: { cp } }), 'Calculado');
+    b.disabled = false;
+    return loadPostal();
+  }
+  if (a === 'bulkcp') {
+    const r = await run(() => api('/api/admin/postal/bulk', { method: 'POST', body: { cps: $('#bulkCp').value } }));
+    if (r) toast(r.started + ' códigos en proceso. Actualizá la lista en un rato.');
+    return;
+  }
+  if (a === 'recalc') {
+    toast('Buscando de nuevo…');
+    await run(() => api(`/api/admin/postal/${b.dataset.cp}/recalc`, { method: 'POST' }), 'Recalculado');
+    return loadPostal();
+  }
+  if (a === 'delcp') {
+    if (!confirm('¿Quitar este código postal de la lista? Se vuelve a calcular si un cliente lo usa.')) return;
+    await run(() => api('/api/admin/postal/' + b.dataset.cp, { method: 'DELETE' }));
+    return loadPostal();
+  }
+
+  // Mi tienda
+  if (a === 'savestore') {
+    const body = collect('#storeForm');
+    await run(async () => { await api('/api/admin/settings', { method: 'PUT', body }); await refresh(); }, 'Cambios guardados');
+    return viewStore();
+  }
+  if (a === 'logo') return $('#logoFile').click();
+  if (a === 'hero') return $('#heroFile').click();
+  if (a === 'rmlogo' || a === 'rmhero') {
+    const key = a === 'rmlogo' ? 'logoId' : 'heroImageId';
+    await run(async () => { await api('/api/admin/settings', { method: 'PUT', body: { [key]: null } }); await refresh(); }, 'Quitado');
+    return viewStore();
+  }
+});
+
+/* ---------- Arranque ---------- */
+if (token) start().then(() => { if ($('#app').hidden) $('#login').hidden = false; });
+else $('#login').hidden = false;
+})();
+</script>
+</body>
+</html>
