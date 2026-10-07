@@ -388,10 +388,6 @@ function renderCartBadge() {
   n.dataset.n = c;
 }
 
-function shipCost() {
-  return form.delivery === 'envio' && ship && ship.ok ? ship.cost : 0;
-}
-
 function openCart() {
   $('#cartOverlay').hidden = false;
   $('#drawer').hidden = false;
@@ -453,9 +449,9 @@ function renderCart() {
     </div>
     <div class="drawer-foot">
       ${sent ? '<div class="sent">Si no se abrió WhatsApp, tocá de nuevo el botón verde.</div>' : ''}
-      <div class="sum"><span>Productos</span><span>${money(subtotal())}</span></div>
-      ${envio ? `<div class="sum"><span>Envío ${ship && ship.ok ? '(aprox.)' : ''}</span><span id="sumShip">${ship && ship.ok ? money(ship.cost) : 'a confirmar'}</span></div>` : ''}
-      <div class="sum total"><span>Total aprox.</span><b id="sumTotal">${money(subtotal() + shipCost())}</b></div>
+      <div class="sum total"><span>Total</span><b id="sumTotal">${money(subtotal())}</b></div>
+      ${envio ? `<div class="sum"><span>Envío estimado (orientativo)</span><span id="sumShip">${ship && ship.ok ? money(ship.cost) : 'a confirmar'}</span></div>
+      <p class="small" style="text-align:left;margin:0 0 10px">El envío no está incluido en el total. Se confirma por WhatsApp.</p>` : ''}
       <button class="btn wa" data-cact="send">Enviar pedido por WhatsApp</button>
       <p class="small">Te respondemos por WhatsApp para confirmar y coordinar el pago.</p>
       ${cart.length ? '<p class="small"><button class="rm" data-cact="clear" style="color:var(--muted)">Vaciar carrito</button></p>' : ''}
@@ -491,7 +487,7 @@ function onCartInput(e) {
 function updateTotals() {
   const a = $('#sumShip'), b = $('#sumTotal');
   if (a) a.textContent = ship && ship.ok ? money(ship.cost) : 'a confirmar';
-  if (b) b.textContent = money(subtotal() + shipCost());
+  if (b) b.textContent = money(subtotal());
 }
 
 async function calcShip() {
@@ -530,29 +526,15 @@ function onCartClick(e) {
 
 /* ---------- pedido por WhatsApp ---------- */
 function buildMessage() {
-  const s = S();
   const L = [];
-  L.push(s.orderIntro || '¡Hola! Quiero hacer este pedido:');
+  L.push(`Hola, soy ${form.name.trim()}. Quiero hacer este pedido:`);
   L.push('');
-  L.push(`👤 *${form.name.trim()}*`);
-  if (form.delivery === 'envio') {
-    L.push('🚚 Envío a domicilio');
-    L.push(`📍 CP ${form.cp.trim()}${ship && ship.ok ? ` (a unos ${ship.km} km)` : ''}`);
-    if (form.address.trim()) L.push(`🏠 ${form.address.trim()}`);
-  } else {
-    L.push(`🛍️ ${s.pickupText || 'Retiro en persona'}`);
-  }
-  if (form.when.trim()) L.push(`📅 Para: ${form.when.trim()}`);
-  L.push('', '*PEDIDO*');
   cart.forEach((c, i) => {
-    L.push(`${i + 1}) *${c.name}* x${c.qty} — ${money(c.unit * c.qty)}`);
-    c.lines.forEach((l) => L.push(`   • ${l}`));
-    if (c.note) L.push(`   📝 ${c.note}`);
+    L.push(`${i + 1}) ${c.name} x${c.qty} - ${money(c.unit * c.qty)}`);
+    c.lines.forEach((l) => L.push(`   - ${l}`));
+    if (c.note) L.push(`   Aclaración: ${c.note}`);
   });
-  L.push('', `Productos: ${money(subtotal())}`);
-  if (form.delivery === 'envio') L.push(ship && ship.ok ? `Envío (aprox.): ${money(ship.cost)}` : 'Envío: a confirmar');
-  L.push(`*Total aprox.: ${money(subtotal() + shipCost())}*`);
-  if (form.notes.trim()) L.push('', `💬 ${form.notes.trim()}`);
+  L.push('', `Total: ${money(subtotal())}`);
   return L.join('\n');
 }
 
