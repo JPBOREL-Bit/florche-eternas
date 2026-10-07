@@ -1,0 +1,88 @@
+# Florche.Eternas – Tienda online
+
+Tienda de flores de cinta de raso con panel de administración.
+El cliente arma su pedido, cotiza el envío con su código postal y el pedido te llega por WhatsApp.
+
+- Tienda: `https://TU-APP.onrender.com/`
+- Panel: `https://TU-APP.onrender.com/admin`
+
+---
+
+## 1. Base de datos (Supabase, gratis)
+
+1. Entrá a https://supabase.com y creá un proyecto nuevo. **Guardá la contraseña** que elijas.
+2. Arriba en el proyecto tocá **Connect**.
+3. Elegí **Session pooler** y copiá la cadena que empieza con `postgresql://...`.
+   (Tiene que ser la del *Session pooler*, porque Render necesita esa.)
+4. En esa cadena reemplazá `[YOUR-PASSWORD]` por tu contraseña. Esa cadena es tu `DATABASE_URL`.
+
+Las tablas se crean solas la primera vez que arranca la tienda.
+
+## 2. Subir el código a GitHub
+
+1. Creá un repositorio nuevo en GitHub (por ejemplo `florche-eternas`).
+2. Cloná el repositorio en tu PC, **fuera de OneDrive** (por ejemplo `C:\Proyectos\florche-eternas`).
+3. Descomprimí este zip adentro de esa carpeta y en PowerShell:
+
+```powershell
+cd C:\Proyectos\florche-eternas
+git add .
+git commit -m "Tienda Florche"
+git push
+```
+
+Cuando hagas cambios al código, repetí esos tres comandos.
+
+## 3. Publicar en Render
+
+1. En https://render.com tocá **New > Web Service** y elegí tu repositorio.
+2. Completá:
+   - **Build Command:** `npm install`
+   - **Start Command:** `npm start`
+3. En **Environment** agregá estas 3 variables:
+
+| Nombre | Valor |
+|---|---|
+| `DATABASE_URL` | la cadena de Supabase del paso 1 |
+| `ADMIN_PASSWORD` | la contraseña con la que vas a entrar al panel |
+| `JWT_SECRET` | cualquier frase larga (ej: `florche-clave-larga-2026`) |
+
+4. Tocá **Create Web Service**. Cuando termine, abrí `/admin` y entrá con tu contraseña.
+
+> En el plan gratis de Render la página se "duerme" si nadie entra un rato, y la primera visita tarda unos segundos en cargar.
+
+## 4. Primeros pasos en el panel
+
+1. **Mi tienda:** poné tu número de **WhatsApp** (con código de país, sin `+`, sin 0 ni 15; ejemplo celular de Mendoza: `5492614567890`), el nombre, textos, logo y color.
+2. **Envíos:** poné **tu código postal** y el **precio por km**.
+3. **Categorías** y **Productos:** cargá lo tuyo y borrá el producto de ejemplo.
+
+### Cómo armar un producto con opciones
+
+Dentro de un producto, cada "opción" es algo que elige el cliente:
+
+- **Elegir una opción** (ej: envoltorio, estilo de flor, color).
+- **Elegir varias** (ej: accesorios).
+- **Cantidad de cada una** (ej: "Flor extra +$2500": el precio sube por cada unidad).
+
+Cada opción puede **sumar un precio**. Si lo dejás en 0 no cambia el total.
+
+Para que el cliente elija **cada flor por separado** (ramo de 3 flores, cada una de otro estilo y color):
+poné "¿Cuántas veces se elige?" = 3 y "Cómo se llama cada una" = Flor. Si dos opciones seguidas (por ejemplo *Estilo* y *Color*) tienen la misma cantidad y el mismo nombre, se muestran juntas: "Flor 1: estilo y color".
+
+Para tener distintas versiones (ramo de 2, de 3, de 4 con distinto precio) podés crear una opción "Cantidad de flores" con cada versión y su precio, o duplicar el producto con el botón **Duplicar**.
+
+## 5. Cómo se calcula el envío
+
+- Solo se aceptan códigos postales de Mendoza (empiezan con 55 o 56).
+- La primera vez que un cliente escribe un código, el sistema busca su ubicación, calcula los km por ruta desde tu código postal y lo guarda. Las siguientes veces responde al instante.
+- El precio es: `costo fijo + (km × precio por km)`, con un mínimo y redondeo que configurás en **Envíos**. Podés elegir cobrar ida y vuelta (km × 2).
+- En **Envíos > Códigos postales** ves todos los códigos calculados con un link al mapa para comprobar el lugar. Si alguno está mal o no se encontró, **escribí los km a mano** (queda marcado "a mano" y no se pisa).
+- Si no se puede calcular un código, el cliente puede enviar igual el pedido y el envío queda "a confirmar" en el mensaje de WhatsApp.
+- Si cambiás tu código postal de origen, las distancias se recalculan solas cuando vuelvan a consultarse.
+
+## Datos técnicos
+
+- Node 18 o superior, Express y PostgreSQL.
+- Las fotos se guardan dentro de la base de datos (se reducen automáticamente al subirlas).
+- Los mapas y distancias usan servicios abiertos y gratuitos (OpenStreetMap / OSRM).
