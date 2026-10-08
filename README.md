@@ -8,81 +8,71 @@ El cliente arma su pedido, cotiza el envío con su código postal y el pedido te
 
 ---
 
-## 1. Base de datos (Supabase, gratis)
+## Cómo actualizar una tienda que ya está publicada
 
-1. Entrá a https://supabase.com y creá un proyecto nuevo. **Guardá la contraseña** que elijas.
-2. Arriba en el proyecto tocá **Connect**.
-3. Elegí **Session pooler** y copiá la cadena que empieza con `postgresql://...`.
-   (Tiene que ser la del *Session pooler*, porque Render necesita esa.)
-4. En esa cadena reemplazá `[YOUR-PASSWORD]` por tu contraseña. Esa cadena es tu `DATABASE_URL`.
-
-Las tablas se crean solas la primera vez que arranca la tienda.
-
-## 2. Subir el código a GitHub
-
-1. Creá un repositorio nuevo en GitHub (por ejemplo `florche-eternas`).
-2. Cloná el repositorio en tu PC, **fuera de OneDrive** (por ejemplo `C:\Proyectos\florche-eternas`).
-3. Descomprimí este zip adentro de esa carpeta y en PowerShell:
+1. Descomprimí este zip **sobre la carpeta de tu repositorio** (aceptá reemplazar los archivos).
+2. En PowerShell:
 
 ```powershell
 cd C:\Proyectos\florche-eternas
 git add .
-git commit -m "Tienda Florche"
+git commit -m "Dashboard, cupones, descuentos y mejoras"
 git push
 ```
 
-Cuando hagas cambios al código, repetí esos tres comandos.
+3. Render se actualiza solo (tarda un par de minutos). **No perdés nada**: productos, fotos, ajustes y códigos postales quedan como están. Las tablas nuevas se crean solas.
 
-## 3. Publicar en Render
+## Instalación desde cero
 
-1. En https://render.com tocá **New > Web Service** y elegí tu repositorio.
-2. Completá:
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
-3. En **Environment** agregá estas 3 variables:
+### 1. Base de datos (Supabase, gratis)
+1. En https://supabase.com creá un proyecto y **guardá la contraseña**.
+2. Tocá **Connect**, elegí **Session pooler** y copiá la cadena `postgresql://...` (el usuario es `postgres.CODIGO`).
+3. Reemplazá `[YOUR-PASSWORD]` por tu contraseña (sin corchetes). Esa cadena es tu `DATABASE_URL`.
+
+### 2. GitHub
+Creá un repositorio, clonalo **fuera de OneDrive**, descomprimí el zip adentro y hacé `git add .`, `git commit`, `git push`.
+
+### 3. Render
+1. **New > Web Service**, elegí el repositorio.
+2. **Build Command:** `npm install` · **Start Command:** `npm start`
+3. En **Environment** cargá:
 
 | Nombre | Valor |
 |---|---|
-| `DATABASE_URL` | la cadena de Supabase del paso 1 |
-| `ADMIN_PASSWORD` | la contraseña con la que vas a entrar al panel |
-| `JWT_SECRET` | cualquier frase larga (ej: `florche-clave-larga-2026`) |
+| `DATABASE_URL` | la cadena de Supabase |
+| `ADMIN_PASSWORD` | la contraseña para entrar al panel |
+| `JWT_SECRET` | cualquier frase larga |
 
-4. Tocá **Create Web Service**. Cuando termine, abrí `/admin` y entrá con tu contraseña.
+---
 
-> En el plan gratis de Render la página se "duerme" si nadie entra un rato, y la primera visita tarda unos segundos en cargar.
+## Qué hay en el panel (`/admin`)
 
-## 4. Primeros pasos en el panel
+**Resumen** – Visitantes, carritos creados, pedidos enviados a WhatsApp, ventas realizadas, rechazadas, pendientes y **Ganancias**. Podés ver Hoy, 7 días, 30 días o Todo. Incluye el recorrido de la venta (entraron → vieron un producto → agregaron al carrito → enviaron pedido → venta realizada), gráficos por día y una tabla por producto (cuánta gente lo vio, cuántos lo agregaron al carrito y cuánto vendió).
+Tus propias visitas desde el panel no se cuentan.
 
-1. **Mi tienda:** poné tu número de **WhatsApp** (con código de país, sin `+`, sin 0 ni 15; ejemplo celular de Mendoza: `5492614567890`), el nombre, textos, logo y color.
-2. **Envíos:** poné **tu código postal** y el **precio por km**.
-3. **Categorías** y **Productos:** cargá lo tuyo y borrá el producto de ejemplo.
+**Pedidos** – Cada vez que un cliente toca "Enviar pedido por WhatsApp" queda registrado acá y, si tenés el panel abierto, aparece una **alerta** (con el nombre y el total) y un contador en la pestaña. Marcás cada pedido como **Venta realizada** (suma a Ganancias) o **Venta rechazada**. Podés volver a ponerlo en pendiente o borrarlo.
+> La alerta funciona con el panel abierto en el navegador. Cuando no lo tenés abierto, el pedido igual te llega por WhatsApp y lo ves en Pedidos al entrar.
 
-### Cómo armar un producto con opciones
+**Productos** – Fijar arriba del catálogo, ponerles **descuento** (porcentaje o monto fijo, con fecha de vencimiento opcional), opciones con precio, fotos.
 
-Dentro de un producto, cada "opción" es algo que elige el cliente:
+**Cupones** – Los creás vos: nombre, porcentaje o monto en pesos (o envío gratis), compra mínima, descuento máximo (tope), productos a los que aplica, vencimiento, cantidad de usos y activar/desactivar. Ejemplos: "50% en productos elegidos" o "$4.000 de descuento comprando más de $20.000". El cliente lo escribe al final del carrito (es opcional).
 
-- **Elegir una opción** (ej: envoltorio, estilo de flor, color).
-- **Elegir varias** (ej: accesorios).
-- **Cantidad de cada una** (ej: "Flor extra +$2500": el precio sube por cada unidad).
+**Promos** – Mensajes que rotan en la barra de arriba (uno por línea) y la **barra de progreso** del carrito: definís niveles por monto (envío gratis, descuento % o $, o un regalo) y se desbloquean solos a medida que el cliente suma plata.
 
-Cada opción puede **sumar un precio**. Si lo dejás en 0 no cambia el total.
+**Envíos** – Tu código postal, precio por km y mínimo. El sistema busca solo los km (solo Mendoza). El envío es **solo orientativo**: se muestra al cliente pero no se suma al total ni va en el mensaje de WhatsApp.
 
-Para que el cliente elija **cada flor por separado** (ramo de 3 flores, cada una de otro estilo y color):
-poné "¿Cuántas veces se elige?" = 3 y "Cómo se llama cada una" = Flor. Si dos opciones seguidas (por ejemplo *Estilo* y *Color*) tienen la misma cantidad y el mismo nombre, se muestran juntas: "Flor 1: estilo y color".
+**Mi tienda** – Nombre, textos, WhatsApp, color, logo y **banner de portada** (conviene una foto horizontal, por ejemplo 1600×600; se muestra completa). El botón "Optimizar fotos ya subidas" comprime las fotos que subiste antes.
 
-Para tener distintas versiones (ramo de 2, de 3, de 4 con distinto precio) podés crear una opción "Cantidad de flores" con cada versión y su precio, o duplicar el producto con el botón **Duplicar**.
+## El mensaje de WhatsApp
 
-## 5. Cómo se calcula el envío
+Lleva solo el saludo con el nombre y el pedido (con las opciones elegidas y aclaraciones), sin emojis y sin envío. Si hubo descuentos o cupón, se agregan líneas con el subtotal, el descuento y el total final.
 
-- Solo se aceptan códigos postales de Mendoza (empiezan con 55 o 56).
-- La primera vez que un cliente escribe un código, el sistema busca su ubicación, calcula los km por ruta desde tu código postal y lo guarda. Las siguientes veces responde al instante.
-- El precio es: `costo fijo + (km × precio por km)`, con un mínimo y redondeo que configurás en **Envíos**. Podés elegir cobrar ida y vuelta (km × 2).
-- En **Envíos > Códigos postales** ves todos los códigos calculados con un link al mapa para comprobar el lugar. Si alguno está mal o no se encontró, **escribí los km a mano** (queda marcado "a mano" y no se pisa).
-- Si no se puede calcular un código, el cliente puede enviar igual el pedido y el envío queda "a confirmar" en el mensaje de WhatsApp.
-- Si cambiás tu código postal de origen, las distancias se recalculan solas cuando vuelvan a consultarse.
+## Fotos
+
+Todas las fotos se comprimen solas: primero en el navegador y después de nuevo en el servidor. Una foto de celular de varios MB queda en unas decenas de KB, con una miniatura aparte para el catálogo.
 
 ## Datos técnicos
 
-- Node 18 o superior, Express y PostgreSQL.
-- Las fotos se guardan dentro de la base de datos (se reducen automáticamente al subirlas).
+- Node 18 o superior, Express y PostgreSQL. La compresión extra usa `sharp` (opcional: si no se pudiera instalar, la tienda funciona igual).
+- Los precios, descuentos, cupones y la barra de progreso se calculan en el servidor, así que el total que queda registrado en el panel no se puede alterar desde el navegador.
 - Los mapas y distancias usan servicios abiertos y gratuitos (OpenStreetMap / OSRM).
