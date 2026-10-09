@@ -21,6 +21,11 @@ const ICONS = {
   gift: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9M2 7h20v5H2zM12 21V7M12 7c-2-4-6-3-5 0 .5 1.5 3 1 5 0zM12 7c2-4 6-3 5 0-.5 1.5-3 1-5 0z"/></svg>',
 };
 
+const HEART_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21C12 21 3 15.5 3 9.5A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 9 2.5C21 15.5 12 21 12 21z"/></svg>';
+const SHARE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg>';
+const slug = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+const productPath = (p) => `/p/${p.id}-${slug(p.name)}`;
+
 let toastT;
 function toast(msg) {
   const t = $('#toast');
@@ -102,6 +107,8 @@ let couponRes = null, couponBusy = false, couponOpen = false, couponMsg = '', co
 let prevUnlocked = new Set();
 let cur = null;                            // producto abierto
 let annT = null;
+let likes = new Set(load('fl_likes', []));   // favoritos de este dispositivo
+let pushed = false;                          // si abrimos el producto agregando una entrada al historial
 
 const S = () => store.settings;
 const prodById = (id) => store.products.find((p) => p.id === id);
@@ -123,8 +130,15 @@ async function init() {
   pruneCart();
   renderCartBadge();
   wireGlobal();
+  if (window.FLReviews) window.FLReviews.renderSection($('#reviews'), store.reviews, { lock: lockScroll, unlock: unlockScroll });
   if (newSession) track('visit');
   if (form.coupon && cart.length) checkCoupon();
+  // Link de un producto (/p/12-nombre): se abre directo
+  const m = /^\/p\/(\d+)/.exec(location.pathname);
+  if (m) {
+    if (prodById(+m[1])) openProduct(+m[1], { fromUrl: true });
+    else history.replaceState(null, '', '/');
+  }
 }
 
 /* ---------- secciones ---------- */
@@ -196,7 +210,8 @@ function renderGrid() {
         return `<button class="card" data-pid="${p.id}">
           <div class="ph">${p.images && p.images[0] ? `<img loading="lazy" decoding="async" src="${thumbUrl(p.images[0])}" alt="${esc(p.name)}">` : FLOWER_SVG}
             ${d.active ? `<span class="tag-off">-${d.pct}%</span>` : ''}
-            ${p.pinned ? '<span class="tag-pin">Destacado</span>' : ''}</div>
+            ${p.pinned ? '<span class="tag-pin">Destacado</span>' : ''}
+            <span class="heart ${likes.has(p.id) ? 'on' : ''}" role="button" tabindex="0" aria-label="Marcar ${esc(p.name)} como favorito" aria-pressed="${likes.has(p.id)}" data-like="${p.id}">${HEART_SVG}</span></div>
           <h3>${esc(p.name)}</h3>
           <div class="price">${hasOpts ? 'Desde ' : ''}${d.active ? `<s>${money(d.original)}</s>` : ''}<b>${money(d.price)}</b></div>
         </button>`;
@@ -247,7 +262,7 @@ function initSel(p) {
   return sel;
 }
 
-function openProduct(id) {
+function openProduct(id, opts = {}) {
   const p = prodById(id);
   if (!p) return;
   cur = { p, sel: initSel(p), qty: 1, img: 0, showErr: false };
@@ -260,6 +275,10 @@ function openProduct(id) {
       <div class="sheet-info">
         ${d.active ? `<span class="badge-off">${d.pct}% de descuento</span>` : ''}
         <h2>${esc(p.name)}</h2>
+        <div class="sh-actions">
+          <button type="button" class="pill-btn ${likes.has(p.id) ? 'on' : ''}" data-act="like" data-like="${p.id}" aria-pressed="${likes.has(p.id)}">${HEART_SVG}<span id="shLikeLbl"></span></button>
+          <button type="button" class="pill-btn" data-act="share">${SHARE_SVG}<span>Compartir</span></button>
+        </div>
         ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}
         <div id="shOpts"></div>
         <div class="grp">
@@ -272,16 +291,79 @@ function openProduct(id) {
   $('#sheetOverlay').hidden = false;
   sh.hidden = false;
   lockScroll();
-  renderGal(); renderOpts(); renderSheetFoot();
+  renderGal(); renderOpts(); renderSheetFoot(); paintLikes(p.id);
+  document.title = `${p.name} · ${S().storeName}`;
+  if (!opts.fromUrl) { try { history.pushState({ fl: 1 }, '', productPath(p)); pushed = true; } catch { pushed = false; } } else pushed = false;
   track('product_view', p.id);
 }
 
-function closeProduct() {
+function closeProduct(fromPop) {
   if ($('#sheet').hidden) return;
   $('#sheet').hidden = true;
   $('#sheetOverlay').hidden = true;
   cur = null;
   unlockScroll();
+  applyTheme();   // restaura el título de la página
+  if (fromPop === true) { pushed = false; return; }
+  if (pushed) { pushed = false; history.back(); }
+  else if (/^\/p\//.test(location.pathname)) history.replaceState(null, '', '/');
+}
+
+/* ---------- favoritos y compartir ---------- */
+function paintLikes(pid) {
+  const on = likes.has(pid);
+  document.querySelectorAll(`[data-like="${pid}"]`).forEach((el) => { el.classList.toggle('on', on); el.setAttribute('aria-pressed', String(on)); });
+  const lbl = $('#shLikeLbl');
+  if (lbl && cur && cur.p.id === pid) lbl.textContent = (on ? 'En tus favoritos' : 'Me gusta') + (typeof cur.p.likes === 'number' ? ` · ${cur.p.likes}` : '');
+}
+async function toggleLike(pid) {
+  const on = !likes.has(pid);
+  if (on) likes.add(pid); else likes.delete(pid);
+  save('fl_likes', [...likes]);
+  paintLikes(pid);
+  try {
+    const r = await fetch('/api/likes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pid, vid, on }) });
+    const j = await r.json();
+    if (!j.ok) throw new Error('x');
+    const p = prodById(pid);
+    if (p && typeof p.likes === 'number') { p.likes = j.count; paintLikes(pid); }
+  } catch {
+    if (on) likes.delete(pid); else likes.add(pid);
+    save('fl_likes', [...likes]);
+    paintLikes(pid);
+    toast('No pudimos guardar tu favorito. Probá de nuevo.');
+  }
+}
+
+async function shareProduct(p) {
+  const url = location.origin + productPath(p);
+  if (navigator.share) {
+    try { await navigator.share({ title: `${p.name} · ${S().storeName}`, text: `Mirá este producto: ${p.name}`, url }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  openShareBox(p, url);
+}
+function closeShareBox() { const b = $('#shareBox'); if (b) b.remove(); }
+function openShareBox(p, url) {
+  closeShareBox();
+  const box = document.createElement('div');
+  box.className = 'share-box';
+  box.id = 'shareBox';
+  box.innerHTML = `<div class="share-in"><h3>Compartir producto</h3>
+    <input id="shUrl" type="text" readonly value="${esc(url)}" aria-label="Link del producto">
+    <div class="row2"><button type="button" class="btn" data-sh="copy">Copiar link</button>
+    <a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(p.name + ' ' + url)}">WhatsApp</a></div>
+    <button type="button" class="linkbtn" data-sh="close">Cerrar</button></div>`;
+  $('#sheet').appendChild(box);
+  box.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-sh]');
+    if (e.target === box || (b && b.dataset.sh === 'close')) return closeShareBox();
+    if (b && b.dataset.sh === 'copy') {
+      try { await navigator.clipboard.writeText(url); }
+      catch { const i = $('#shUrl'); i.select(); try { document.execCommand('copy'); } catch {} }
+      toast('Link copiado');
+    }
+  });
 }
 
 function renderGal() {
@@ -353,6 +435,8 @@ function onSheetClick(e) {
   const { p, sel } = cur;
   if (act === 'close') return closeProduct();
   if (act === 'img') { cur.img = +b.dataset.i; return renderGal(); }
+  if (act === 'like') return toggleLike(cur.p.id);
+  if (act === 'share') return shareProduct(cur.p);
   if (act === 'pick') {
     const arr = sel[b.dataset.g];
     const i = +b.dataset.i;
@@ -782,8 +866,19 @@ function wireGlobal() {
     if (e.target.closest('#openCart')) return openCart();
     const cat = e.target.closest('[data-cat]');
     if (cat) { activeCat = cat.dataset.cat; renderCats(); renderGrid(); return; }
+    const heart = e.target.closest('.heart[data-like]');
+    if (heart) { e.preventDefault(); return toggleLike(+heart.dataset.like); }
     const card = e.target.closest('[data-pid]');
     if (card) return openProduct(+card.dataset.pid);
+  });
+  document.addEventListener('keydown', (e) => {
+    const heart = e.target.closest && e.target.closest('.heart[data-like]');
+    if (heart && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); toggleLike(+heart.dataset.like); }
+  }, true);
+  window.addEventListener('popstate', () => {
+    const m = /^\/p\/(\d+)/.exec(location.pathname);
+    if (!$('#sheet').hidden) { if (!m || !cur || +m[1] !== cur.p.id) closeProduct(true); }
+    else if (m && prodById(+m[1])) openProduct(+m[1], { fromUrl: true });
   });
   $('#sheet').addEventListener('click', onSheetClick);
   $('#sheetOverlay').addEventListener('click', closeProduct);

@@ -42,6 +42,7 @@ Creá un repositorio, clonalo **fuera de OneDrive**, descomprimí el zip adentro
 | `DATABASE_URL` | la cadena de Supabase |
 | `ADMIN_PASSWORD` | la contraseña para entrar al panel |
 | `JWT_SECRET` | cualquier frase larga |
+| `GOOGLE_CLIENT_ID` | para las reseñas (ver sección **Reseñas**). Podés agregarla más tarde |
 
 ---
 
@@ -63,6 +64,34 @@ Tus propias visitas desde el panel no se cuentan.
 
 **Mi tienda** – Nombre, textos, WhatsApp, color, logo y **banner de portada** (conviene una foto horizontal, por ejemplo 1600×600; se muestra completa). El botón "Optimizar fotos ya subidas" comprime las fotos que subiste antes.
 
+## Reseñas
+
+Al final de la tienda aparece la sección **Reseñas**: puntuación general (por ejemplo 4.3, o 0.0 si todavía no hay), barras de 5 a 1 estrella con cuántas personas puso cada una, los comentarios pasando solos (con nombre y Gmail parcialmente tapados y "hace cuánto"), el botón **Dejá tu reseña** y **Ver todos los comentarios**. Ese botón lleva a la página `/resenas`, donde se puede filtrar por estrellas, ver la fecha de cada reseña y también dejar una.
+
+- Para opinar hay que poner **estrellas (obligatorio, de 1 a 5)**, **nombre** y **Gmail verificado con Google**. El comentario es opcional.
+- El Gmail se verifica con "Continuar con Google": así es una cuenta real y de esa persona. Solo se aceptan cuentas @gmail.com.
+- Se rechazan los Gmail con palabras raras o prohibidas (incluso disfrazadas, como "f4ke"), con letras repetidas o con demasiados números. La lista de palabras la editás en el panel, pestaña **Reseñas**.
+- Una reseña por cuenta de Gmail: si la misma persona vuelve a opinar, se actualiza la anterior.
+- En la tienda nunca se ve el Gmail completo. En el panel sí.
+- Desde el panel podés **ocultar** o **borrar** cualquier reseña.
+
+### Cómo conectar Google (una sola vez, gratis, unos 10 minutos)
+
+1. Entrá a **console.cloud.google.com** con tu cuenta de Google y creá un proyecto (por ejemplo "Florche").
+2. Andá a **APIs y servicios > Pantalla de consentimiento de OAuth**, elegí **Externo**, poné el nombre de tu tienda y tu mail, y al final tocá **Publicar aplicación** (así cualquier persona puede entrar con su cuenta).
+3. Andá a **Credenciales > Crear credenciales > ID de cliente de OAuth** y elegí **Aplicación web**.
+4. En **Orígenes autorizados de JavaScript** agregá la dirección de tu tienda, por ejemplo `https://florche-eternas.onrender.com` (y tu dominio propio si más adelante tenés uno).
+5. Copiá el **ID de cliente** (termina en `.apps.googleusercontent.com`).
+6. En Render, **Environment**, agregá la variable `GOOGLE_CLIENT_ID` con ese valor y guardá. Render se reinicia solo.
+
+Hasta que lo hagas, la sección de reseñas no se muestra a tus clientes (así no ven un botón que no funciona). En el panel, pestaña **Reseñas**, aparece "Conectado" cuando está lista. Si alguna pantalla de Google se ve distinta a lo que dice acá, pedime ayuda con una captura.
+
+## Favoritos y compartir
+
+- Cada producto tiene un corazón para **marcarlo como favorito** (en el catálogo y dentro del producto). Cuenta **un voto por dispositivo** y se puede quitar.
+- Los clientes **no ven cuántos favoritos tiene** cada producto (solo vos, en el panel: lista de productos y tabla del Resumen). Si preferís que lo vean, activá la opción en la pestaña **Reseñas**.
+- Cada producto tiene un botón **Compartir** y un **link propio** (por ejemplo `tutienda.com/p/12-ramo-de-3-flores`). En el celular se abre el menú para mandarlo por WhatsApp u otra app; en la compu se puede copiar el link. Quien lo recibe abre directamente ese producto, y al pegarlo en WhatsApp se ve la foto, el nombre y el precio.
+
 ## El mensaje de WhatsApp
 
 Lleva solo el saludo con el nombre y el pedido (con las opciones elegidas y aclaraciones), sin emojis y sin envío. Si hubo descuentos o cupón, se agregan líneas con el subtotal, el descuento y el total final.
@@ -73,6 +102,6 @@ Todas las fotos se comprimen solas: primero en el navegador y después de nuevo 
 
 ## Datos técnicos
 
-- Node 18 o superior, Express y PostgreSQL. La compresión extra usa `sharp` (opcional: si no se pudiera instalar, la tienda funciona igual).
+- Node 18 o superior, Express y PostgreSQL. La compresión extra y la imagen de vista previa al compartir usan `sharp` (opcional: si no se pudiera instalar, la tienda funciona igual).
 - Los precios, descuentos, cupones y la barra de progreso se calculan en el servidor, así que el total que queda registrado en el panel no se puede alterar desde el navegador.
 - Los mapas y distancias usan servicios abiertos y gratuitos (OpenStreetMap / OSRM).

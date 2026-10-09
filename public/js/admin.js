@@ -202,7 +202,7 @@ function viewProducts() {
     <div class="prow">
       <div class="th">${p.images[0] ? `<img src="/img/${p.images[0]}" alt="">` : '✿'}</div>
       <div class="info"><b>${esc(p.name)}${p.active ? '' : '<span class="badge">Oculto</span>'}${p.pinned ? '<span class="badge ok">Fijado</span>' : ''}${discBadge(p)}</b>
-        <small>${esc(catName(p.category_id))} · base ${money(p.base_price)} · ${p.groups.length} opción(es)</small></div>
+        <small>${esc(catName(p.category_id))} · base ${money(p.base_price)} · ${p.groups.length} opción(es)${p.likes ? ` · ♥ ${p.likes} ${p.likes === 1 ? 'favorito' : 'favoritos'}` : ''}</small></div>
       <div class="acts">
         <button class="btn sec sm" data-a="up" data-i="${i}" ${i === 0 ? 'disabled' : ''} title="Subir">↑</button>
         <button class="btn sec sm" data-a="down" data-i="${i}" ${i === data.products.length - 1 ? 'disabled' : ''} title="Bajar">↓</button>

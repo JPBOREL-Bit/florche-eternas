@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 const compression = require('compression');
+const reviewsLib = require('./lib/reviews.js');
 
 let sharp = null;
 try { sharp = require('sharp'); } catch (e) { console.warn('sharp no disponible: las fotos se guardan como las comprime el navegador.'); }
@@ -53,6 +54,10 @@ const DEFAULT_SETTINGS = {
   // Barra de progreso de beneficios en el carrito
   progressOn: false,
   progressTiers: [],
+  // Reseñas y favoritos
+  reviewsOn: true,
+  reviewBannedWords: reviewsLib.DEFAULT_BANNED,
+  showLikes: false,
   // Envíos
   originCP: '5500',
   pricePerKm: 300,
@@ -66,7 +71,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const NUM_KEYS = ['pricePerKm', 'kmMultiplier', 'shippingBase', 'shippingMin', 'shippingRound'];
-const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn'];
+const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes'];
 const ID_KEYS = ['logoId', 'heroImageId'];
 
 async function getSettings() {
@@ -213,6 +218,26 @@ async function initDb() {
     create index if not exists orders_status on orders(status);
     create index if not exists orders_created on orders(created_at);
 
+    create table if not exists reviews (
+      id serial primary key,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      email text not null,
+      email_key text not null unique,
+      name text not null,
+      rating smallint not null check (rating between 1 and 5),
+      comment text not null default '',
+      hidden boolean not null default false
+    );
+    create index if not exists reviews_created on reviews(created_at desc);
+
+    create table if not exists likes (
+      pid int not null,
+      vid text not null,
+      created_at timestamptz not null default now(),
+      primary key (pid, vid)
+    );
+
     create table if not exists coupons (
       id serial primary key,
       code text not null unique,
@@ -331,7 +356,8 @@ function auth(req, res, next) {
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : '';
   try {
-    jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (!payload || payload.admin !== true) throw new Error('no es administradora');
     next();
   } catch {
     res.status(401).json({ error: 'Sesión vencida. Volvé a ingresar.' });
@@ -568,6 +594,15 @@ app.get('/img/:id/:v?', wrap(async (req, res) => {
   const { rows } = await q('select mime, data, thumb, thumb_mime from images where id = $1', [id]);
   const r = rows[0];
   if (!r) return res.status(404).end();
+  if (req.params.v === 'og' && sharp) {
+    try {
+      const out = await sharp(r.data, { failOn: 'none' }).rotate()
+        .resize(1200, 630, { fit: 'contain', background: '#ffffff' }).jpeg({ quality: 80 }).toBuffer();
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.send(out);
+    } catch (e) { /* si falla se manda la foto original */ }
+  }
   const useThumb = req.params.v === 't' && r.thumb;
   res.set('Content-Type', useThumb ? r.thumb_mime || 'image/webp' : r.mime);
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
@@ -576,13 +611,20 @@ app.get('/img/:id/:v?', wrap(async (req, res) => {
 
 // Datos públicos de la tienda
 app.get('/api/store', wrap(async (req, res) => {
-  const [settings, cats, prods] = await Promise.all([
+  const [settings, cats, prods, reviews] = await Promise.all([
     getSettings(),
     q('select id, name from categories order by position, id'),
-    q(`select ${PRODUCT_COLS} from products where active order by pinned desc, position, id`),
+    q(`select ${PRODUCT_COLS}, (select count(*)::int from likes l where l.pid = products.id) as likes
+       from products where active order by pinned desc, position, id`),
+    revApi.storeBlock(),
   ]);
   res.set('Cache-Control', 'no-store');
-  res.json({ settings, categories: cats.rows, products: prods.rows.map(fmtProduct) });
+  const products = prods.rows.map((p) => {
+    const f = fmtProduct(p);
+    if (!settings.showLikes) delete f.likes; // los clientes no ven la cantidad salvo que lo actives
+    return f;
+  });
+  res.json({ settings, categories: cats.rows, products, reviews });
 }));
 
 // Cotización de envío
@@ -612,7 +654,7 @@ app.get('/api/admin/store', auth, wrap(async (req, res) => {
   const [settings, cats, prods] = await Promise.all([
     getSettings(),
     q('select id, name from categories order by position, id'),
-    q(`select ${PRODUCT_COLS}, active from products order by position, id`),
+    q(`select ${PRODUCT_COLS}, active, (select count(*)::int from likes l where l.pid = products.id) as likes from products order by position, id`),
   ]);
   res.json({ settings, categories: cats.rows, products: prods.rows.map(fmtProduct) });
 }));
@@ -667,6 +709,7 @@ app.put('/api/admin/products/:id', auth, wrap(async (req, res) => {
 }));
 app.delete('/api/admin/products/:id', auth, wrap(async (req, res) => {
   await q('delete from products where id = $1', [req.params.id]);
+  await q('delete from likes where pid = $1', [req.params.id]);
   res.json({ ok: true });
 }));
 
@@ -756,10 +799,12 @@ app.delete('/api/admin/postal/:cp', auth, wrap(async (req, res) => {
 }));
 
 // Cupones, pedidos y estadísticas
-const ctx = { app, q, auth, wrap, rateOk, getSettings };
+const ctx = { app, q, auth, wrap, rateOk, getSettings, jwtSecret: JWT_SECRET };
+const revApi = reviewsLib.mount(ctx);
 require('./lib/coupons.js').mount(ctx);
 require('./lib/orders.js').mount(ctx);
 require('./lib/analytics.js').mount(ctx);
+require('./lib/share.js').mount(ctx);
 
 /* --------------------------- Archivos estáticos --------------------- */
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));

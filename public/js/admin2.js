@@ -81,8 +81,8 @@ FL.views.dashboard = async function () {
     <div class="card">
       <h3 class="ct">Cada producto</h3>
       <div class="tw"><table>
-        <thead><tr><th>Producto</th><th>Vistas</th><th>Personas</th><th>Al carrito</th><th>En pedidos</th><th>Vendidos</th><th>Ingresos</th></tr></thead>
-        <tbody>${s.products.map((p) => `<tr><td>${esc(p.name)}</td><td>${num(p.views)}</td><td>${num(p.viewers)}</td><td>${num(p.adds)}</td><td>${num(p.orders)}</td><td>${num(p.sold)}</td><td>${money(p.revenue)}</td></tr>`).join('') || '<tr><td colspan="7" class="hint">Todavía no hay productos.</td></tr>'}</tbody>
+        <thead><tr><th>Producto</th><th>Vistas</th><th>Personas</th><th>Al carrito</th><th>Favoritos</th><th>En pedidos</th><th>Vendidos</th><th>Ingresos</th></tr></thead>
+        <tbody>${s.products.map((p) => `<tr><td>${esc(p.name)}</td><td>${num(p.views)}</td><td>${num(p.viewers)}</td><td>${num(p.adds)}</td><td>${num(p.likes)}</td><td>${num(p.orders)}</td><td>${num(p.sold)}</td><td>${money(p.revenue)}</td></tr>`).join('') || '<tr><td colspan="8" class="hint">Todavía no hay productos.</td></tr>'}</tbody>
       </table></div>
       <p class="hint">“Vistas” cuenta cada vez que alguien abre el producto; “Personas”, cuántas personas distintas lo abrieron. “Vendidos” e “Ingresos” solo cuentan ventas que marcaste como realizadas (los ingresos por producto no descuentan cupones). Tus propias visitas desde este dispositivo no se cuentan.</p>
     </div>`;
