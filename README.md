@@ -100,6 +100,27 @@ Lleva solo el saludo con el nombre y el pedido (con las opciones elegidas y acla
 
 Todas las fotos se comprimen solas: primero en el navegador y después de nuevo en el servidor. Una foto de celular de varios MB queda en unas decenas de KB, con una miniatura aparte para el catálogo.
 
+## Que la tienda no se duerma (plan gratis de Render)
+
+**Qué pasa:** Render apaga una tienda gratis cuando pasan 15 minutos sin visitas, y la primera persona que entra después espera unos segundos a que arranque. Además regala **750 horas por mes**, compartidas entre **todos tus servicios gratis**. Un mes de 31 días tiene 744 horas, así que una sola tienda prendida las 24 horas entra justo (sobran 6). Si se acaban las horas, Render suspende todos tus servicios gratis hasta el día 1 del mes siguiente. Por eso: si tenés **otros servicios gratis activos en la misma cuenta de Render**, sus horas se suman y no alcanza para dejar todo prendido siempre.
+
+**La forma más confiable: un monitor externo gratis** que visite la tienda cada 5 minutos, aunque tengas todo cerrado y la computadora apagada. La dirección para visitar es:
+
+`https://TU-APP.onrender.com/api/health`
+
+Esa dirección hace una consulta real a la base de datos, así que además evita que la base gratis de Supabase se pause por falta de uso (se pausa después de aproximadamente una semana sin actividad). Si la base deja de responder, devuelve error y el monitor te avisa por mail.
+
+Pasos con StatusCake (su plan gratis revisa cada 5 minutos y permite negocios; pide entrar a la cuenta al menos una vez cada 90 días):
+1. Creá una cuenta gratis en **statuscake.com**.
+2. Creá un nuevo test de tipo **Uptime / HTTP** con esa dirección y frecuencia de **5 minutos**.
+3. Poné tu mail para recibir avisos y guardá. Los nombres de los botones pueden variar un poco.
+
+Otras opciones: UptimeRobot (revisá sus términos, porque su regla sobre uso comercial en el plan gratis cambió y las fuentes se contradicen) o cualquier servicio que haga una visita web cada 5 minutos.
+
+**Opcional, desde el propio servidor:** si agregás en Render la variable `KEEP_AWAKE` con el valor `on`, la tienda se consulta sola cada 10 minutos. Sirve solo mientras está despierta (no la puede despertar si ya se durmió), por eso conviene usar el monitor externo. Consume las mismas horas.
+
+**Para ahorrar horas** un mes complicado, pausá el monitor: la tienda se duerme a los 15 minutos y deja de gastar horas.
+
 ## Datos técnicos
 
 - Node 18 o superior, Express y PostgreSQL. La compresión extra y la imagen de vista previa al compartir usan `sharp` (opcional: si no se pudiera instalar, la tienda funciona igual).

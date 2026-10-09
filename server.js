@@ -28,6 +28,8 @@ const pool = new Pool({
   ssl: isLocal ? false : { rejectUnauthorized: false },
   max: 8,
 });
+// Si se corta la conexión con la base (reinicio, pausa, red), no se cae el servidor: se reconecta sola.
+pool.on('error', (e) => console.error('Conexión con la base interrumpida (se reintenta sola):', e.message));
 const q = (text, params) => pool.query(text, params);
 const rid = () => crypto.randomBytes(4).toString('hex');
 
@@ -585,7 +587,34 @@ app.set('trust proxy', 1);
 app.use(compression());
 app.use(express.json({ limit: '8mb' }));
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+// Sirve para los monitores externos y también mantiene activa la base de datos (Supabase gratis se pausa si no se usa)
+let selfPings = 0;
+app.get('/api/health', async (req, res) => {
+  let db = false;
+  try {
+    // si la base no contesta en 4 segundos, se informa como caída (no se queda colgado)
+    await Promise.race([q('select 1'), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))]);
+    db = true;
+  } catch (e) { /* igual responde */ }
+  res.set('Cache-Control', 'no-store');
+  res.status(db ? 200 : 503).json({ ok: db, db, pings: selfPings }); // 503 si la base no responde: el monitor te avisa
+});
+
+// Modo "no dormir" (opcional): con KEEP_AWAKE=on la tienda se consulta a sí misma cada 10 minutos,
+// así Render no la apaga por inactividad mientras esté despierta.
+function startKeepAwake() {
+  const url = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL;
+  if (String(process.env.KEEP_AWAKE || '').toLowerCase() !== 'on' || !url) return;
+  const every = Math.max(500, Number(process.env.KEEP_AWAKE_MS) || 10 * 60e3);
+  console.log(`Modo "no dormir" activado: la tienda se consulta a sí misma cada ${Math.round((every / 60e3) * 10) / 10} min.`);
+  const t = setInterval(async () => {
+    try {
+      const r = await fetch(url.replace(/\/$/, '') + '/api/health');
+      if (r.ok) selfPings++;
+    } catch (e) { console.warn('keep-awake falló:', e.message); }
+  }, every);
+  if (t.unref) t.unref();
+}
 
 // Imágenes guardadas en la base de datos (/img/ID = grande, /img/ID/t = miniatura)
 app.get('/img/:id/:v?', wrap(async (req, res) => {
@@ -814,6 +843,7 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 initDb()
   .then(() => {
     app.listen(PORT, () => console.log('Florche.Eternas escuchando en el puerto ' + PORT));
+    startKeepAwake();
     cleanupImages();
     setInterval(cleanupImages, 24 * 3600e3).unref();
   })
