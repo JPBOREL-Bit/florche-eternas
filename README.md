@@ -53,6 +53,11 @@ Tus propias visitas desde el panel no se cuentan.
 
 **Pedidos** – Cada vez que un cliente toca "Enviar pedido por WhatsApp" queda registrado acá y, si tenés el panel abierto, aparece una **alerta** (con el nombre y el total) y un contador en la pestaña. Marcás cada pedido como **Venta realizada** (suma a Ganancias) o **Venta rechazada**. Podés volver a ponerlo en pendiente o borrarlo.
 > La alerta funciona con el panel abierto en el navegador. Cuando no lo tenés abierto, el pedido igual te llega por WhatsApp y lo ves en Pedidos al entrar.
+Al **rechazar** un pedido se borran los datos del cliente y del pedido (sin vuelta atrás; el Resumen conserva solo el conteo), por eso pide confirmación.
+
+**Mayoristas** – Solicitudes de compradores por mayor, compradores aceptados y sus compras (ver sección **Mayoristas**).
+
+**Calculadora** – Tus costos: materia prima, productos con receta, tiempo y precio recomendado (ver sección **Calculadora de costos**).
 
 **Productos** – Fijar arriba del catálogo, ponerles **descuento** (porcentaje o monto fijo, con fecha de vencimiento opcional), opciones con precio, fotos.
 
@@ -92,6 +97,52 @@ Hasta que lo hagas, la sección de reseñas no se muestra a tus clientes (así n
 - Los clientes **no ven cuántos favoritos tiene** cada producto (solo vos, en el panel: lista de productos y tabla del Resumen). Si preferís que lo vean, activá la opción en la pestaña **Reseñas**.
 - Cada producto tiene un botón **Compartir** y un **link propio** (por ejemplo `tutienda.com/p/12-ramo-de-3-flores`). En el celular se abre el menú para mandarlo por WhatsApp u otra app; en la compu se puede copiar el link. Quien lo recibe abre directamente ese producto, y al pegarlo en WhatsApp se ve la foto, el nombre y el precio.
 
+## Mayoristas
+
+Al final de la tienda hay una sección **"Trabajá como mayorista"** que lleva a la página `/mayoristas`. Ahí la persona elige si es **emprendimiento** o **negocio** y completa sus datos:
+
+- **Emprendimiento:** nombre del emprendimiento, hace cuánto está en marcha (aproximado), red social (opcional).
+- **Negocio:** razón social, nombre de fantasía (opcional), dueño o responsable, CUIT (se valida), condición frente al IVA, rubro, domicilio comercial, hace cuánto está en marcha, si tiene local a la calle, web o Instagram (opcional).
+- **En los dos casos:** nombre y apellido, **WhatsApp (obligatorio)**, email (Gmail), ciudad donde vive, cuántas flores piensa comprar por mes (aproximado) y un comentario opcional. El número de WhatsApp se acomoda solo (`0261 15 456 7890` y `+54 9 261 456 7890` quedan iguales).
+- La cantidad por mes es solo para que sepas qué tan grande es: **no cambia el trato** y no se rechaza por poner poco o mucho. La página lo aclara.
+- Al terminar, le dice que le vas a escribir por WhatsApp para pasarle los **precios de las flores para compras mayores** (compra mínima: 20 flores por mes, la cambiás en el panel) y charlar todo.
+
+En el panel, pestaña **Mayoristas** (con contador y alerta de solicitud nueva):
+- **Solicitudes:** ves todos los datos, un botón para escribirle por WhatsApp y otro por email, y **Aceptar comprador** o **Rechazar comprador**. Rechazar borra todo, sin dejar nada.
+- **Compradores:** al aceptar, la persona pasa a esta sección (sus datos se guardan comprimidos). Ahí anotás **cuántas flores compró y cuánta plata entró** en cada compra, con fecha. Eso se **suma al Resumen** (Ganancias y "Flores a mayoristas") y lo podés **sacar** cuando quieras: cada compra con "Quitar", o el comprador entero.
+- Ajustes: apagar la sección o cambiar la compra mínima.
+
+## Calculadora de costos
+
+Pestaña **Calculadora** del panel. Es solo para tus cuentas: no tiene nada que ver con la tienda y no se ve desde afuera. Arranca vacía.
+
+1. **Agregar materia prima:** nombre, cuánto pagaste y qué trae eso (por ejemplo una cinta de 10 metros, una caja de 100 unidades, un kilo). El sistema te dice cuánto te sale cada centímetro, unidad, gramo o mililitro. Si cambiás el precio, todos los productos se recalculan solos. No deja borrar una materia prima que usa algún producto.
+2. **Crear nuevo producto:** le ponés un nombre y le agregás la materia prima que lleva. Cada una la podés medir como:
+   - **una cantidad** (centímetros, metros, unidades, gramos, kilos, mililitros, litros),
+   - **piezas de cierto largo** (por ejemplo 20 pétalos de 9 cm),
+   - **una fracción o porcentaje de lo que compraste:** `1/3`, `1/4`, `1/16`, `25%`, `0,25`, `1 1/2`, o escrito con palabras (`un tercio`, `un cuarto`, `una décima`, `medio`).
+3. **Emergencia (opcional):** un porcentaje más o un monto fijo.
+4. **Tiempo que tardás en hacerlo** (horas y minutos). En **Ajustes** de la calculadora ponés cuánto querés ganar por hora (en pesos), y en cada producto podés poner otra distinta.
+5. El sistema muestra el **precio recomendado**, cuánto es materia prima, emergencia, tu tiempo y ganancia (en pesos y en porcentaje), y la ganancia real por hora. El precio se **redondea hacia arriba** al múltiplo que elijas (por ejemplo de a $100: 1.730 pasa a 1.800 y 1.801 pasa a 1.900).
+
+Ejemplo de la lógica: si los materiales salen $2.000, querés ganar $2.000 por hora y tardás 30 minutos, el precio recomendado es $3.000 ($2.000 de materiales y $1.000 de ganancia).
+
+## Espacio y compresión
+
+En la pestaña **Resumen**, al final, está la tarjeta **Espacio usado**: cuánto ocupa tu base de datos (límite del plan gratis de Supabase: 500 MB) y qué ocupa cada cosa. Qué se comprime y cómo:
+
+- **Fotos:** se reducen y se guardan en formato liviano (WebP), con una miniatura aparte. Una foto de varios MB queda en decenas de KB.
+- **Visitas y estadísticas:** los registros de hace más de 90 días se resumen por día, solos, todos los días. Los números del Resumen no cambian. El botón **Comprimir ahora** lo hace en el momento.
+- **Compradores mayoristas aceptados:** sus datos se guardan comprimidos (gzip).
+- **Pedidos y solicitudes rechazados:** se borran los datos (en los pedidos queda solo el número para el conteo del Resumen).
+- Las fotos ya no usadas se limpian solas.
+
+Los datos de texto (pedidos, productos, reseñas) pesan muy poco; lo que más ocupa son las fotos, que ya van comprimidas.
+
+## Vaciar el carrito
+
+Al tocar "Vaciar carrito" aparece una cajita en el medio de la pantalla con **Sí** y **No**.
+
 ## El mensaje de WhatsApp
 
 Lleva solo el saludo con el nombre y el pedido (con las opciones elegidas y aclaraciones), sin emojis y sin envío. Si hubo descuentos o cupón, se agregan líneas con el subtotal, el descuento y el total final.
@@ -102,24 +153,14 @@ Todas las fotos se comprimen solas: primero en el navegador y después de nuevo 
 
 ## Que la tienda no se duerma (plan gratis de Render)
 
-**Qué pasa:** Render apaga una tienda gratis cuando pasan 15 minutos sin visitas, y la primera persona que entra después espera unos segundos a que arranque. Además regala **750 horas por mes**, compartidas entre **todos tus servicios gratis**. Un mes de 31 días tiene 744 horas, así que una sola tienda prendida las 24 horas entra justo (sobran 6). Si se acaban las horas, Render suspende todos tus servicios gratis hasta el día 1 del mes siguiente. Por eso: si tenés **otros servicios gratis activos en la misma cuenta de Render**, sus horas se suman y no alcanza para dejar todo prendido siempre.
+Render apaga una tienda gratis cuando pasan 15 minutos sin visitas, y la primera persona que entra después espera unos segundos a que arranque. Además regala **750 horas por mes, compartidas entre todos tus servicios gratis** (un mes de 31 días tiene 744 horas): si tenés otros servicios gratis en la misma cuenta, mantener todo prendido no alcanza.
 
-**La forma más confiable: un monitor externo gratis** que visite la tienda cada 5 minutos, aunque tengas todo cerrado y la computadora apagada. La dirección para visitar es:
+Se probó la idea de un monitor externo y se descartó. Lo que quedó:
 
-`https://TU-APP.onrender.com/api/health`
-
-Esa dirección hace una consulta real a la base de datos, así que además evita que la base gratis de Supabase se pause por falta de uso (se pausa después de aproximadamente una semana sin actividad). Si la base deja de responder, devuelve error y el monitor te avisa por mail.
-
-Pasos con StatusCake (su plan gratis revisa cada 5 minutos y permite negocios; pide entrar a la cuenta al menos una vez cada 90 días):
-1. Creá una cuenta gratis en **statuscake.com**.
-2. Creá un nuevo test de tipo **Uptime / HTTP** con esa dirección y frecuencia de **5 minutos**.
-3. Poné tu mail para recibir avisos y guardá. Los nombres de los botones pueden variar un poco.
-
-Otras opciones: UptimeRobot (revisá sus términos, porque su regla sobre uso comercial en el plan gratis cambió y las fuentes se contradicen) o cualquier servicio que haga una visita web cada 5 minutos.
-
-**Opcional, desde el propio servidor:** si agregás en Render la variable `KEEP_AWAKE` con el valor `on`, la tienda se consulta sola cada 10 minutos. Sirve solo mientras está despierta (no la puede despertar si ya se durmió), por eso conviene usar el monitor externo. Consume las mismas horas.
-
-**Para ahorrar horas** un mes complicado, pausá el monitor: la tienda se duerme a los 15 minutos y deja de gastar horas.
+- `KEEP_AWAKE=on` (variable opcional en Render): la tienda se consulta sola cada 10 minutos. **Solo sirve mientras está despierta**: si ya se durmió, no se puede despertar sola. Consume las mismas horas.
+- La dirección `/api/health` hace una consulta real a la base de datos y devuelve error (503) si no responde. Sirve para cualquier monitor que quieras usar en el futuro, y mantiene activa la base gratis de Supabase (que se pausa tras más o menos una semana sin uso).
+- Si la conexión con la base se corta, la tienda no se cae: se recupera sola cuando vuelve.
+- La opción que garantiza que nunca se duerma es un plan pago de Render.
 
 ## Datos técnicos
 

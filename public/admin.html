@@ -99,7 +99,7 @@ th { font-size:.78rem; color:var(--muted); background:#faf6f9; }
 td input[type=number] { width:90px; padding:6px 8px; }
 .tag { font-size:.7rem; font-weight:700; padding:2px 7px; border-radius:99px; background:#e8eef9; color:#2d4f8f; }
 .tag.man { background:#fff0d6; color:#8a5a00; }
-.toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#2b1726; color:#fff; padding:10px 18px; border-radius:99px; z-index:90; opacity:0; pointer-events:none; transition:.25s; max-width:90vw; text-align:center; }
+.toast { position:fixed; left:50%; top:14px; transform:translateX(-50%); background:#2b1726; color:#fff; padding:10px 18px; border-radius:99px; z-index:90; opacity:0; pointer-events:none; transition:.25s; max-width:90vw; text-align:center; }
 .toast.show { opacity:1; }
 .toast.bad { background:var(--bad); }
 .logo-prev { max-height:64px; border-radius:8px; border:1px solid var(--line); background:#fff; padding:4px; }
@@ -184,11 +184,13 @@ td input[type=number] { width:90px; padding:6px 8px; }
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" data-tab="dashboard">Resumen</button>
       <button class="tab" role="tab" data-tab="orders">Pedidos <span class="nbadge" id="tabOrdersN" hidden></span></button>
+      <button class="tab" role="tab" data-tab="wholesale">Mayoristas <span class="nbadge" id="tabWhN" hidden></span></button>
       <button class="tab" role="tab" data-tab="products">Productos</button>
       <button class="tab" role="tab" data-tab="categories">Categorías</button>
       <button class="tab" role="tab" data-tab="coupons">Cupones</button>
       <button class="tab" role="tab" data-tab="promos">Promos</button>
       <button class="tab" role="tab" data-tab="reviews">Reseñas</button>
+      <button class="tab" role="tab" data-tab="calc">Calculadora</button>
       <button class="tab" role="tab" data-tab="shipping">Envíos</button>
       <button class="tab" role="tab" data-tab="store">Mi tienda</button>
     </div>
@@ -203,5 +205,8 @@ td input[type=number] { width:90px; padding:6px 8px; }
 <script src="/js/admin.js"></script>
 <script src="/js/admin2.js"></script>
 <script src="/js/admin3.js"></script>
+<script src="/js/admin4.js"></script>
+<script src="/js/calc.js"></script>
+<script src="/js/admin5.js"></script>
 </body>
 </html>

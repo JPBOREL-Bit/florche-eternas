@@ -60,6 +60,9 @@ const DEFAULT_SETTINGS = {
   reviewsOn: true,
   reviewBannedWords: reviewsLib.DEFAULT_BANNED,
   showLikes: false,
+  // Mayoristas
+  wholesaleOn: true,
+  wholesaleMin: 20,
   // Envíos
   originCP: '5500',
   pricePerKm: 300,
@@ -72,8 +75,8 @@ const DEFAULT_SETTINGS = {
   shippingNote: 'El costo del envío es aproximado y se confirma por WhatsApp.',
 };
 
-const NUM_KEYS = ['pricePerKm', 'kmMultiplier', 'shippingBase', 'shippingMin', 'shippingRound'];
-const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes'];
+const NUM_KEYS = ['pricePerKm', 'kmMultiplier', 'shippingBase', 'shippingMin', 'shippingRound', 'wholesaleMin'];
+const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes', 'wholesaleOn'];
 const ID_KEYS = ['logoId', 'heroImageId'];
 
 async function getSettings() {
@@ -239,6 +242,67 @@ async function initDb() {
       created_at timestamptz not null default now(),
       primary key (pid, vid)
     );
+
+    create table if not exists wholesalers (
+      id serial primary key,
+      created_at timestamptz not null default now(),
+      decided_at timestamptz,
+      status text not null default 'pendiente',
+      type text not null,
+      name text not null,
+      business text not null,
+      city text not null,
+      qty int not null default 0,
+      whatsapp text not null,
+      email text not null,
+      data jsonb,
+      data_z bytea
+    );
+    create index if not exists wholesalers_status on wholesalers(status);
+    create index if not exists wholesalers_wa on wholesalers(whatsapp);
+
+    create table if not exists wholesale_purchases (
+      id serial primary key,
+      wid int not null references wholesalers(id) on delete cascade,
+      day date not null,
+      flowers int not null default 0,
+      amount numeric not null default 0,
+      note text not null default '',
+      created_at timestamptz not null default now()
+    );
+    create index if not exists wholesale_purchases_day on wholesale_purchases(day);
+
+    create table if not exists events_daily (
+      day date not null,
+      type text not null,
+      pid int not null default 0,
+      n int not null default 0,
+      uvid int not null default 0,
+      usid int not null default 0,
+      primary key (day, type, pid)
+    );
+
+    create table if not exists calc_materials (
+      id serial primary key,
+      name text not null,
+      price numeric not null default 0,
+      pack_qty numeric not null default 1,
+      unit text not null default 'u',
+      note text not null default '',
+      created_at timestamptz not null default now()
+    );
+    create table if not exists calc_products (
+      id serial primary key,
+      name text not null,
+      lines jsonb not null default '[]',
+      emergency_type text not null default 'none',
+      emergency_value numeric not null default 0,
+      minutes numeric not null default 0,
+      hourly_override numeric,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+    create table if not exists calc_config (k text primary key, v numeric not null);
 
     create table if not exists coupons (
       id serial primary key,
@@ -828,12 +892,15 @@ app.delete('/api/admin/postal/:cp', auth, wrap(async (req, res) => {
 }));
 
 // Cupones, pedidos y estadísticas
-const ctx = { app, q, auth, wrap, rateOk, getSettings, jwtSecret: JWT_SECRET };
+const ctx = { app, q, auth, wrap, rateOk, getSettings, jwtSecret: JWT_SECRET, pool, cleanupImages };
 const revApi = reviewsLib.mount(ctx);
 require('./lib/coupons.js').mount(ctx);
 require('./lib/orders.js').mount(ctx);
 require('./lib/analytics.js').mount(ctx);
 require('./lib/share.js').mount(ctx);
+require('./lib/wholesale.js').mount(ctx);
+require('./lib/calc.js').mount(ctx);
+const maintenance = require('./lib/maintenance.js').mount(ctx);
 
 /* --------------------------- Archivos estáticos --------------------- */
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
@@ -846,6 +913,10 @@ initDb()
     startKeepAwake();
     cleanupImages();
     setInterval(cleanupImages, 24 * 3600e3).unref();
+    // Cada día se resumen las visitas viejas para ahorrar espacio
+    const nightly = () => maintenance.run().catch((e) => console.error('mantenimiento:', e.message));
+    setTimeout(nightly, 90e3).unref();
+    setInterval(nightly, 24 * 3600e3).unref();
   })
   .catch((e) => {
     console.error('No se pudo iniciar la base de datos:', e.message);

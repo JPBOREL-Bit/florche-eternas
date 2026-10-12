@@ -52,13 +52,14 @@ FL.views.dashboard = async function () {
 
     <div class="card money">
       <span>Ganancias</span>
-      <b>${money(s.sales.revenue)}</b>
-      <small>${s.sales.done} venta(s) realizada(s) en este período · Total histórico: ${money(s.all_time.revenue)} (${s.all_time.sales} ventas)</small>
+      <b>${money(s.sales.revenue + s.wholesale.revenue)}</b>
+      <small>Tienda online ${money(s.sales.revenue)} (${s.sales.done} venta(s)) · Mayoristas ${money(s.wholesale.revenue)} (${num(s.wholesale.flowers)} flores)<br>Total histórico: ${money(s.all_time.revenue + s.all_time_wholesale.revenue)}</small>
     </div>
 
     <div class="stats">
       ${stat('Visitantes', num(s.visitors), 'personas distintas')}
       ${stat('Carritos creados', num(s.carts), 'agregaron algo')}
+      ${stat('Flores a mayoristas', num(s.wholesale.flowers), s.wholesale.purchases + ' compra(s) anotada(s)')}
       ${stat('Pedidos a WhatsApp', num(s.orders_sent), pct(s.orders_sent, s.carts) + ' de los carritos')}
       ${stat('Ventas realizadas', num(s.sales.done), 'ticket promedio ' + money(avg))}
       ${stat('Pendientes', num(s.pending), 'esperando tu respuesta')}
@@ -123,6 +124,7 @@ function orderCard(o, isNew) {
   const extra = [];
   if (o.tier_discount > 0) extra.push(`Promo automática: -${money(o.tier_discount)}`);
   if (o.coupon_code) extra.push(`Cupón ${esc(o.coupon_code)}${o.coupon_discount ? ': -' + money(o.coupon_discount) : ''}`);
+  if (o.status === 'rechazada') extra.push('Los datos de este pedido se borraron al rechazarlo.');
   (o.benefits || []).forEach((b) => extra.push(esc(b)));
   return `<div class="ocard ${isNew ? 'new' : ''}">
     <div class="ohead"><b>${isNew ? '<span class="newtag">NUEVO</span> ' : ''}#${o.id} · ${esc(o.name)}</b><span class="badge ${BADGE[o.status]}">${STATUS_LABEL[o.status]}</span></div>
@@ -131,9 +133,9 @@ function orderCard(o, isNew) {
     ${extra.length ? `<div class="oextra">${extra.join(' · ')}</div>` : ''}
     <div class="ototal">Total del pedido <b>${money(o.total)}</b></div>
     <div class="acts" style="justify-content:flex-start">
-      ${o.status !== 'realizada' ? `<button class="btn okb sm" data-o="realizada" data-id="${o.id}">Venta realizada</button>` : ''}
+      ${o.status === 'pendiente' ? `<button class="btn okb sm" data-o="realizada" data-id="${o.id}">Venta realizada</button>` : ''}
       ${o.status !== 'rechazada' ? `<button class="btn danger sm" data-o="rechazada" data-id="${o.id}">Venta rechazada</button>` : ''}
-      ${o.status !== 'pendiente' ? `<button class="btn sec sm" data-o="pendiente" data-id="${o.id}">Volver a pendiente</button>` : ''}
+      ${o.status === 'realizada' ? `<button class="btn sec sm" data-o="pendiente" data-id="${o.id}">Volver a pendiente</button>` : ''}
       <button class="btn sec sm" data-o="del" data-id="${o.id}">Borrar</button>
     </div>
   </div>`;
@@ -432,6 +434,7 @@ view.addEventListener('click', async (e) => {
       if (!confirm('¿Borrar este pedido? Si ya estaba marcado como venta realizada, deja de sumar a tus ganancias.')) return;
       await run(() => api('/api/admin/orders/' + id, { method: 'DELETE' }), 'Pedido borrado');
     } else {
+      if (o === 'rechazada' && !confirm('¿Rechazar este pedido? Se borran los datos del cliente y del pedido, y no se pueden recuperar.')) return;
       const msg = { realizada: 'Venta realizada: se sumó a tus ganancias', rechazada: 'Venta rechazada', pendiente: 'Vuelve a pendiente' }[o];
       await run(() => api('/api/admin/orders/' + id + '/status', { method: 'PUT', body: { status: o } }), msg);
     }

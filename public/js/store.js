@@ -53,6 +53,36 @@ function unlockScroll() {
   }
 }
 
+/* Caja de confirmación en el medio de la pantalla (Sí / No) */
+const TRASH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/></svg>';
+function confirmBox({ title, text, yes = 'Sí', no = 'No' }) {
+  return new Promise((resolve) => {
+    const w = document.createElement('div');
+    w.className = 'cbx';
+    w.innerHTML = `<div class="cbx-ov"></div>
+      <div class="cbx-box" role="alertdialog" aria-modal="true" aria-labelledby="cbxT">
+        <div class="cbx-ic">${TRASH_SVG}</div>
+        <h3 id="cbxT">${esc(title)}</h3>
+        <p>${esc(text || '')}</p>
+        <div class="cbx-act"><button type="button" class="btn ghost" data-v="0">${esc(no)}</button><button type="button" class="btn danger" data-v="1">${esc(yes)}</button></div>
+      </div>`;
+    document.body.appendChild(w);
+    const done = (v) => { document.removeEventListener('keydown', onKey, true); w.remove(); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+    document.addEventListener('keydown', onKey, true);
+    w.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-v]');
+      if (b) done(b.dataset.v === '1');
+      else if (e.target.classList.contains('cbx-ov')) done(false);
+    });
+    w.querySelector('[data-v="0"]').focus();
+  });
+}
+async function askClearCart() {
+  const yes = await confirmBox({ title: '¿Vaciar el carrito?', text: 'Se van a sacar todos los productos que agregaste.', yes: 'Sí, vaciar', no: 'No, dejarlo' });
+  if (yes) { cart = []; cartChanged(); }
+}
+
 /* ---------- colores del tema (sin depender de funciones nuevas del navegador) ---------- */
 function mixHex(hex, target, t) {
   const n = parseInt(hex.slice(1), 16);
@@ -126,7 +156,7 @@ async function init() {
     return;
   }
   applyTheme();
-  renderAnn(); renderTop(); renderHero(); renderCats(); renderGrid(); renderAbout(); renderFoot();
+  renderAnn(); renderTop(); renderHero(); renderCats(); renderGrid(); renderAbout(); renderWholesale(); renderFoot();
   pruneCart();
   renderCartBadge();
   wireGlobal();
@@ -217,6 +247,19 @@ function renderGrid() {
         </button>`;
       }).join('')
     : '<p class="empty">Todavía no hay productos en esta categoría.</p>';
+}
+
+function renderWholesale() {
+  const s = S();
+  const el = $('#wholesale');
+  if (!el) return;
+  if (!s.wholesaleOn) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = `<div class="wrap"><div class="ws-card">
+    <div><h2 class="sec-title">Trabajá como mayorista</h2>
+      <p>¿Tenés un emprendimiento o un negocio? Comprá flores de cinta de raso en cantidad, con precios para compras mayores. Compra mínima: <b>${Number(s.wholesaleMin) || 20} flores por mes</b>.</p></div>
+    <a class="btn" href="/mayoristas">Quiero ser mayorista</a>
+  </div></div>`;
 }
 
 function renderAbout() {
@@ -804,7 +847,7 @@ function onCartClick(e) {
   if (a === 'inc' && item) item.qty = Math.min(99, item.qty + 1);
   else if (a === 'dec' && item) { item.qty -= 1; if (item.qty <= 0) cart = cart.filter((c) => c !== item); }
   else if (a === 'rm' && item) cart = cart.filter((c) => c !== item);
-  else if (a === 'clear') { if (confirm('¿Vaciar el carrito?')) cart = []; else return; }
+  else if (a === 'clear') { askClearCart(); return; }
   else return;
   cartChanged();
 }

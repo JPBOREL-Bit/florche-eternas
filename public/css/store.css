@@ -259,7 +259,7 @@ a { touch-action: manipulation; }
 .coupon .applied.warn { background: #FFF5E0; border-color: #D9A520; }
 
 .toast {
-  position: fixed; left: 50%; bottom: calc(96px + var(--safe-b)); transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+  position: fixed; left: 50%; top: 12px; transform: translate(-50%, -12px); opacity: 0; pointer-events: none;
   background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 999px; z-index: 80; font-size: .92rem; transition: opacity .25s, transform .25s;
   width: max-content; max-width: calc(100vw - 32px); text-align: center;
 }
