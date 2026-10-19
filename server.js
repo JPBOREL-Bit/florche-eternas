@@ -60,6 +60,9 @@ const DEFAULT_SETTINGS = {
   reviewsOn: true,
   reviewBannedWords: reviewsLib.DEFAULT_BANNED,
   showLikes: false,
+  // Botón flotante de WhatsApp
+  waFloatOn: true,
+  waFloatText: 'Hola, tengo una consulta sobre sus flores',
   // Mayoristas
   wholesaleOn: true,
   wholesaleMin: 20,
@@ -76,7 +79,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const NUM_KEYS = ['pricePerKm', 'kmMultiplier', 'shippingBase', 'shippingMin', 'shippingRound', 'wholesaleMin'];
-const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes', 'wholesaleOn'];
+const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes', 'wholesaleOn', 'waFloatOn'];
 const ID_KEYS = ['logoId', 'heroImageId'];
 
 async function getSettings() {
@@ -165,6 +168,7 @@ async function initDb() {
     alter table products add column if not exists discount_type text;
     alter table products add column if not exists discount_value numeric not null default 0;
     alter table products add column if not exists discount_ends timestamptz;
+    alter table products add column if not exists lead_hours int not null default 0;
 
     create table if not exists images (
       id serial primary key,
@@ -222,6 +226,17 @@ async function initDb() {
     );
     create index if not exists orders_status on orders(status);
     create index if not exists orders_created on orders(created_at);
+    alter table orders add column if not exists needed_for date;
+    alter table orders add column if not exists phone text;
+    alter table events add column if not exists src text;
+    create table if not exists push_keys (id int primary key, pub text not null, priv text not null);
+    create table if not exists push_subs (
+      endpoint text primary key,
+      p256dh text not null,
+      auth text not null,
+      ua text,
+      created_at timestamptz not null default now()
+    );
 
     create table if not exists reviews (
       id serial primary key,
@@ -482,13 +497,14 @@ function cleanProduct(b) {
     groups,
     active: b.active === undefined ? true : !!b.active,
     pinned: !!b.pinned,
+    lead_hours: Math.max(0, Math.min(2160, parseInt(b.lead_hours, 10) || 0)),
     discount_type: dType,
     discount_value: dValue,
     discount_ends: dEnds,
   };
 }
 
-const PRODUCT_COLS = 'id, category_id, name, description, base_price, images, groups, pinned, discount_type, discount_value, discount_ends';
+const PRODUCT_COLS = 'id, category_id, name, description, base_price, images, groups, pinned, discount_type, discount_value, discount_ends, lead_hours';
 const fmtProduct = (p) => ({ ...p, base_price: Number(p.base_price), discount_value: Number(p.discount_value) });
 
 /* ------------------------------------------------------------------ */
@@ -784,9 +800,9 @@ app.post('/api/admin/products', auth, wrap(async (req, res) => {
   let p;
   try { p = cleanProduct(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
   const { rows } = await q(
-    `insert into products(category_id, name, description, base_price, images, groups, active, pinned, discount_type, discount_value, discount_ends, position)
-     values($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11, coalesce((select max(position) from products), 0) + 1) returning id`,
-    [p.category_id, p.name, p.description, p.base_price, JSON.stringify(p.images), JSON.stringify(p.groups), p.active, p.pinned, p.discount_type, p.discount_value, p.discount_ends]
+    `insert into products(category_id, name, description, base_price, images, groups, active, pinned, discount_type, discount_value, discount_ends, lead_hours, position)
+     values($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11,$12, coalesce((select max(position) from products), 0) + 1) returning id`,
+    [p.category_id, p.name, p.description, p.base_price, JSON.stringify(p.images), JSON.stringify(p.groups), p.active, p.pinned, p.discount_type, p.discount_value, p.discount_ends, p.lead_hours]
   );
   res.json({ id: rows[0].id });
 }));
@@ -795,8 +811,8 @@ app.put('/api/admin/products/:id', auth, wrap(async (req, res) => {
   try { p = cleanProduct(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
   await q(
     `update products set category_id=$2, name=$3, description=$4, base_price=$5, images=$6::jsonb, groups=$7::jsonb, active=$8,
-       pinned=$9, discount_type=$10, discount_value=$11, discount_ends=$12 where id=$1`,
-    [req.params.id, p.category_id, p.name, p.description, p.base_price, JSON.stringify(p.images), JSON.stringify(p.groups), p.active, p.pinned, p.discount_type, p.discount_value, p.discount_ends]
+       pinned=$9, discount_type=$10, discount_value=$11, discount_ends=$12, lead_hours=$13 where id=$1`,
+    [req.params.id, p.category_id, p.name, p.description, p.base_price, JSON.stringify(p.images), JSON.stringify(p.groups), p.active, p.pinned, p.discount_type, p.discount_value, p.discount_ends, p.lead_hours]
   );
   res.json({ ok: true });
 }));
@@ -893,6 +909,9 @@ app.delete('/api/admin/postal/:cp', auth, wrap(async (req, res) => {
 
 // Cupones, pedidos y estadísticas
 const ctx = { app, q, auth, wrap, rateOk, getSettings, jwtSecret: JWT_SECRET, pool, cleanupImages };
+// Primero las notificaciones, para que pedidos y mayoristas puedan avisar al celular
+const pushApi = require('./lib/push.js').mount(ctx);
+ctx.notify = pushApi.notify;
 const revApi = reviewsLib.mount(ctx);
 require('./lib/coupons.js').mount(ctx);
 require('./lib/orders.js').mount(ctx);
@@ -904,6 +923,7 @@ const maintenance = require('./lib/maintenance.js').mount(ctx);
 
 /* --------------------------- Archivos estáticos --------------------- */
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/sw-push.js', (req, res) => res.sendFile('sw-push.js', { root: path.join(__dirname, 'public'), headers: { 'Service-Worker-Allowed': '/', 'Cache-Control': 'no-cache' } }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 

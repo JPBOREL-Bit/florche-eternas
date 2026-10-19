@@ -202,7 +202,7 @@ function viewProducts() {
     <div class="prow">
       <div class="th">${p.images[0] ? `<img src="/img/${p.images[0]}" alt="">` : '✿'}</div>
       <div class="info"><b>${esc(p.name)}${p.active ? '' : '<span class="badge">Oculto</span>'}${p.pinned ? '<span class="badge ok">Fijado</span>' : ''}${discBadge(p)}</b>
-        <small>${esc(catName(p.category_id))} · base ${money(p.base_price)} · ${p.groups.length} opción(es)${p.likes ? ` · ♥ ${p.likes} ${p.likes === 1 ? 'favorito' : 'favoritos'}` : ''}</small></div>
+        <small>${esc(catName(p.category_id))} · base ${money(p.base_price)} · ${p.groups.length} opción(es)${p.lead_hours ? ` · anticipación ${p.lead_hours >= 24 && p.lead_hours % 24 === 0 ? p.lead_hours / 24 + ' d' : p.lead_hours + ' h'}` : ''}${p.likes ? ` · ♥ ${p.likes} ${p.likes === 1 ? 'favorito' : 'favoritos'}` : ''}</small></div>
       <div class="acts">
         <button class="btn sec sm" data-a="up" data-i="${i}" ${i === 0 ? 'disabled' : ''} title="Subir">↑</button>
         <button class="btn sec sm" data-a="down" data-i="${i}" ${i === data.products.length - 1 ? 'disabled' : ''} title="Bajar">↓</button>
@@ -225,7 +225,7 @@ async function moveItem(table, arr, i, d, after) {
   after();
 }
 
-const blankProduct = () => ({ name: '', description: '', base_price: 0, category_id: data.categories[0] ? data.categories[0].id : null, images: [], groups: [], active: true, pinned: false, discount_type: '', discount_value: 0, discount_ends: null });
+const blankProduct = () => ({ name: '', description: '', base_price: 0, category_id: data.categories[0] ? data.categories[0].id : null, images: [], groups: [], active: true, pinned: false, discount_type: '', discount_value: 0, discount_ends: null, lead_hours: 0 });
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 function openEditor(p, id) {
@@ -253,6 +253,8 @@ function renderEditor() {
           <div class="field"><label class="l">Precio base ($)</label><input type="number" min="0" step="any" data-path="base_price" value="${esc(ed.base_price)}">
             <p class="hint">Es lo que cuesta el producto sin elegir nada. Cada opción suma su precio.</p></div>
         </div>
+        <div class="field"><label class="l">Tiempo de anticipación (en horas)</label><input type="number" min="0" max="2160" step="1" data-path="lead_hours" value="${esc(ed.lead_hours || 0)}">
+          <p class="hint">Cuántas horas antes hay que pedirlo. Los clientes lo ven en el producto y el carrito les avisa la fecha más próxima. 0 = sin anticipación. Por ejemplo: 48 = pedir con 2 días.</p></div>
         <div class="field"><label class="l">Descripción</label><textarea data-path="description">${esc(ed.description)}</textarea></div>
         <label class="chk"><input type="checkbox" data-path="active" data-type="check" ${ed.active ? 'checked' : ''}> Mostrar en la tienda</label>
         <label class="chk" style="margin-top:8px"><input type="checkbox" data-path="pinned" data-type="check" ${ed.pinned ? 'checked' : ''}> Fijar arriba del catálogo (producto destacado)</label>
@@ -389,6 +391,7 @@ async function saveProduct() {
   if (!ed.name.trim()) return toast('Poné un nombre al producto', true);
   const body = clone(ed);
   body.base_price = Number(body.base_price) || 0;
+  body.lead_hours = Math.max(0, parseInt(body.lead_hours, 10) || 0);
   body.groups.forEach((g) => {
     g.options = g.options.filter((o) => String(o.name).trim());
     g.options.forEach((o) => { o.price = Number(o.price) || 0; });
@@ -515,6 +518,9 @@ function viewStore() {
       <div class="field"><label class="l">Sobre vos / tu emprendimiento</label><textarea data-s="about">${esc(s.about)}</textarea></div>
       ${f('whatsapp', 'Tu WhatsApp (adonde llegan los pedidos)', 'inputmode="tel"', 'Con código de país, sin + ni espacios ni 0 ni 15. Ejemplo celular de Mendoza: 5492614567890')}
       ${f('instagram', 'Instagram (usuario o link)', '', 'Ej: florche.eternas')}
+      <h3 style="margin:16px 0 8px;font-size:1rem">Botón flotante de WhatsApp</h3>
+      <label class="chk" style="margin-bottom:12px"><input type="checkbox" data-s="waFloatOn" ${s.waFloatOn ? 'checked' : ''}> Mostrar el botón flotante de WhatsApp en toda la tienda</label>
+      <div class="field"><label class="l">Mensaje pre-cargado del botón</label><input type="text" data-s="waFloatText" value="${esc(s.waFloatText || '')}" placeholder="Hola, tengo una consulta sobre sus flores"><p class="hint">El cliente lo puede editar antes de enviar.</p></div>
       ${f('footerText', 'Texto al pie de la página')}
       <div class="field"><label class="l">Color principal</label><div class="row"><input type="color" data-s="primaryColor" value="${esc(s.primaryColor)}" style="width:60px;height:40px;padding:2px;border:1.5px solid var(--line);border-radius:9px"><span class="hint">Cambia botones, cinta y detalles de toda la tienda.</span></div></div>
       <div class="field"><label class="l">Logo (opcional)</label>

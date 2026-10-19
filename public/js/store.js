@@ -26,6 +26,45 @@ const SHARE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a
 const slug = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 const productPath = (p) => `/p/${p.id}-${slug(p.name)}`;
 
+const CLOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+const SEARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const leadText = (h) => {
+  h = Number(h) || 0;
+  if (h >= 24 && h % 24 === 0) { const d = h / 24; return `${d} ${d === 1 ? 'día' : 'días'}`; }
+  return `${h} ${h === 1 ? 'hora' : 'horas'}`;
+};
+const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const earliestFrom = (hours) => new Date(Date.now() + (Number(hours) || 0) * 3600e3);
+function whenLabel(d) {
+  const t = new Date();
+  const tm = new Date(Date.now() + 864e5);
+  if (isoDate(d) === isoDate(t)) return 'hoy';
+  if (isoDate(d) === isoDate(tm)) return `mañana (${DAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1})`;
+  return `${DAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
+}
+// De dónde llegó la persona: ?origen=instagram en el link, o la página desde la que vino
+function sourceOf() {
+  const clean = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 24);
+  try {
+    const p = new URL(location.href).searchParams;
+    const raw = clean(p.get('origen') || p.get('utm_source') || p.get('ref') || p.get('src'));
+    if (raw) return raw;
+    if (!document.referrer) return 'directo';
+    const h = new URL(document.referrer).hostname.toLowerCase().replace(/^(www|m|l|lm)\./, '');
+    if (h === location.hostname.replace(/^www\./, '')) return 'directo';
+    if (/instagram\.com$/.test(h)) return 'instagram';
+    if (/(facebook\.com|fb\.com|fb\.me)$/.test(h)) return 'facebook';
+    if (/(whatsapp\.com|wa\.me)$/.test(h)) return 'whatsapp';
+    if (/google\./.test(h)) return 'google';
+    if (/tiktok\.com$/.test(h)) return 'tiktok';
+    if (/(youtube\.com|youtu\.be)$/.test(h)) return 'youtube';
+    if (/(t\.co|twitter\.com|x\.com)$/.test(h)) return 'twitter';
+    return clean(h.split('.')[0]) || 'otro';
+  } catch { return 'directo'; }
+}
+
 let toastT;
 function toast(msg) {
   const t = $('#toast');
@@ -116,10 +155,10 @@ try {
   sid = sessionStorage.getItem('fl_sid');
   if (!sid) { sid = uid(); sessionStorage.setItem('fl_sid', sid); newSession = true; }
 } catch { sid = uid(); newSession = true; }
-function track(type, pid, qty) {
+function track(type, pid, qty, extra) {
   if (noTrack) return;
   try {
-    const body = JSON.stringify({ vid, sid, type, pid: pid || null, qty: qty || null });
+    const body = JSON.stringify({ vid, sid, type, pid: pid || null, qty: qty || null, ...(extra || {}) });
     if (navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' }));
     else fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true });
   } catch {}
@@ -130,9 +169,11 @@ let store = { settings: {}, categories: [], products: [] };
 let activeCat = 'all';
 let cart = load('fl_cart2', []);           // [{ id, pid, sel, qty, note, key }]
 let orderToken = load('fl_tok', null) || uid();
-let form = Object.assign({ name: '', delivery: 'envio', cp: '', address: '', coupon: '' }, load('fl_form2', {}));
+let form = Object.assign({ name: '', phone: '', delivery: 'envio', cp: '', address: '', coupon: '', needed: '' }, load('fl_form2', {}));
+let query = '';                            // texto del buscador
+let sortBy = 'default';                     // orden del catálogo
+let sending = false;
 let ship = null;                           // { ok, cp, km, cost } | { ok:false, ... } | { loading:true }
-let sent = null;                           // { url }
 let couponRes = null, couponBusy = false, couponOpen = false, couponMsg = '', couponReq = 0, couponTimer = null;
 let prevUnlocked = new Set();
 let cur = null;                            // producto abierto
@@ -156,12 +197,12 @@ async function init() {
     return;
   }
   applyTheme();
-  renderAnn(); renderTop(); renderHero(); renderCats(); renderGrid(); renderAbout(); renderWholesale(); renderFoot();
+  renderAnn(); renderTop(); renderHero(); renderCats(); renderGrid(); renderAbout(); renderWholesale(); renderFoot(); renderWaFloat(); renderTools();
   pruneCart();
   renderCartBadge();
   wireGlobal();
   if (window.FLReviews) window.FLReviews.renderSection($('#reviews'), store.reviews, { lock: lockScroll, unlock: unlockScroll });
-  if (newSession) track('visit');
+  if (newSession) track('visit', null, null, { src: sourceOf() });
   if (form.coupon && cart.length) checkCoupon();
   // Link de un producto (/p/12-nombre): se abre directo
   const m = /^\/p\/(\d+)/.exec(location.pathname);
@@ -222,17 +263,47 @@ function renderHero() {
 
 function renderCats() {
   const el = $('#cats');
-  if (!store.categories.length) { el.innerHTML = ''; return; }
+  if (!store.products.length) { el.innerHTML = ''; return; }
   const used = new Set(store.products.map((p) => p.category_id));
   const cats = store.categories.filter((c) => used.has(c.id));
   const hasUncat = store.products.some((p) => !p.category_id);
-  const items = [{ id: 'all', name: 'Todo' }, ...cats, ...(hasUncat && cats.length ? [{ id: 'none', name: 'Otros' }] : [])];
+  const favN = store.products.filter((p) => likes.has(p.id)).length;
+  const items = [{ id: 'all', name: 'Todo' }, ...cats, ...(hasUncat && cats.length ? [{ id: 'none', name: 'Otros' }] : []), { id: 'fav', name: `♥ Favoritos (${favN})` }];
   el.innerHTML = items.map((c) => `<button class="cat" role="tab" data-cat="${c.id}" aria-selected="${String(c.id) === String(activeCat)}">${esc(c.name)}</button>`).join('');
 }
 
+function renderTools() {
+  const el = $('#tools');
+  if (!el) return;
+  if (!store.products.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="tl">
+    <div class="srch">${SEARCH_SVG}<input id="q" type="search" placeholder="Buscar flores…" autocomplete="off" aria-label="Buscar" value="${esc(query)}"><button type="button" id="qClear" aria-label="Borrar búsqueda" ${query ? '' : 'hidden'}>×</button></div>
+    <select id="sortBy" aria-label="Ordenar"><option value="default">Ordenar: destacados</option><option value="asc">Menor precio</option><option value="desc">Mayor precio</option><option value="off">Con descuento primero</option></select>
+  </div>`;
+  $('#sortBy').value = sortBy;
+}
+
+function renderWaFloat() {
+  const a = $('#waFloat');
+  if (!a) return;
+  const s = S();
+  if (!s.waFloatOn || !s.whatsapp) { a.hidden = true; return; }
+  a.href = `https://wa.me/${s.whatsapp}?text=${encodeURIComponent(s.waFloatText || '')}`;
+  a.hidden = false;
+}
+
 function renderGrid() {
-  const list = store.products.filter((p) =>
-    activeCat === 'all' ? true : activeCat === 'none' ? !p.category_id : String(p.category_id) === String(activeCat));
+  let list = store.products.filter((p) =>
+    activeCat === 'all' ? true : activeCat === 'fav' ? likes.has(p.id) : activeCat === 'none' ? !p.category_id : String(p.category_id) === String(activeCat));
+  const words = norm(query).trim().split(/\s+/).filter(Boolean);
+  if (words.length) list = list.filter((p) => { const hay = norm(p.name + ' ' + (p.description || '')); return words.every((w) => hay.includes(w)); });
+  const priceOf = (p) => P.discounted(P.minPrice(p), p).price;
+  if (sortBy === 'asc') list = [...list].sort((a, b) => priceOf(a) - priceOf(b));
+  else if (sortBy === 'desc') list = [...list].sort((a, b) => priceOf(b) - priceOf(a));
+  else if (sortBy === 'off') list = [...list].sort((a, b) => Number(P.discounted(P.minPrice(b), b).active) - Number(P.discounted(P.minPrice(a), a).active));
+  let empty = '<p class="empty">Todavía no hay productos en esta categoría.</p>';
+  if (words.length) empty = `<p class="empty">No encontramos nada con “${esc(query)}”. Probá con otra palabra.</p>`;
+  else if (activeCat === 'fav') empty = '<p class="empty">Todavía no marcaste favoritos. Tocá el corazón de los productos que te gusten.</p>';
   $('#grid').innerHTML = list.length
     ? list.map((p) => {
         const hasOpts = (p.groups || []).some((g) => g.options.length);
@@ -244,9 +315,10 @@ function renderGrid() {
             <span class="heart ${likes.has(p.id) ? 'on' : ''}" role="button" tabindex="0" aria-label="Marcar ${esc(p.name)} como favorito" aria-pressed="${likes.has(p.id)}" data-like="${p.id}">${HEART_SVG}</span></div>
           <h3>${esc(p.name)}</h3>
           <div class="price">${hasOpts ? 'Desde ' : ''}${d.active ? `<s>${money(d.original)}</s>` : ''}<b>${money(d.price)}</b></div>
+          ${p.lead_hours > 0 ? `<div class="lead">${CLOCK_SVG}Pedir con ${leadText(p.lead_hours)} de anticipación</div>` : ''}
         </button>`;
       }).join('')
-    : '<p class="empty">Todavía no hay productos en esta categoría.</p>';
+    : empty;
 }
 
 function renderWholesale() {
@@ -322,6 +394,7 @@ function openProduct(id, opts = {}) {
           <button type="button" class="pill-btn ${likes.has(p.id) ? 'on' : ''}" data-act="like" data-like="${p.id}" aria-pressed="${likes.has(p.id)}">${HEART_SVG}<span id="shLikeLbl"></span></button>
           <button type="button" class="pill-btn" data-act="share">${SHARE_SVG}<span>Compartir</span></button>
         </div>
+        ${p.lead_hours > 0 ? `<div class="lead-box">${CLOCK_SVG}<div><b>Pedilo con ${leadText(p.lead_hours)} de anticipación</b><span>Si lo pedís ahora, lo tenés desde ${whenLabel(earliestFrom(p.lead_hours))}.</span></div></div>` : ''}
         ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}
         <div id="shOpts"></div>
         <div class="grp">
@@ -364,6 +437,8 @@ async function toggleLike(pid) {
   if (on) likes.add(pid); else likes.delete(pid);
   save('fl_likes', [...likes]);
   paintLikes(pid);
+  renderCats();
+  if (activeCat === 'fav') renderGrid();
   try {
     const r = await fetch('/api/likes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pid, vid, on }) });
     const j = await r.json();
@@ -379,7 +454,7 @@ async function toggleLike(pid) {
 }
 
 async function shareProduct(p) {
-  const url = location.origin + productPath(p);
+  const url = location.origin + productPath(p) + '?origen=compartir';
   if (navigator.share) {
     try { await navigator.share({ title: `${p.name} · ${S().storeName}`, text: `Mirá este producto: ${p.name}`, url }); return; }
     catch (e) { if (e && e.name === 'AbortError') return; }
@@ -527,7 +602,7 @@ function addToCart() {
   closeProduct();
   const T = totals();
   const hint = S().progressOn && T.t.next ? ` Te faltan ${money(T.t.next.at - T.subtotal)} para ${P.tierLabel(T.t.next).toLowerCase()}.` : '';
-  toast('Agregado al carrito.' + hint);
+  toast('Agregado al carrito.' + (p.lead_hours > 0 ? ` Recordá: se pide con ${leadText(p.lead_hours)} de anticipación.` : '') + hint);
 }
 
 /* ---------- carrito: cálculo ---------- */
@@ -613,7 +688,7 @@ function renderCart() {
 
 function refreshCart() {
   if (!cart.length || !$('#cItems')) return renderCart();
-  renderProg(); renderItems(); renderCoupon(); renderCartFoot();
+  renderProg(); renderItems(); renderCoupon(); renderCartFoot(); renderDateHint();
 }
 
 function progressPct(subtotal, tiers) {
@@ -673,6 +748,20 @@ function renderItems() {
     </div>`).join('');
 }
 
+const cartLeadHours = () => Math.max(0, ...view().map((x) => Number(x.p.lead_hours) || 0));
+const minNeeded = () => isoDate(earliestFrom(cartLeadHours()));
+function renderDateHint() {
+  const el = $('#dateHint');
+  if (!el) return;
+  const h = cartLeadHours();
+  const min = minNeeded();
+  const inp = $('#fDate');
+  if (inp) inp.min = min;
+  let html = h > 0 ? `Tu pedido necesita al menos <b>${leadText(h)}</b> de anticipación: la fecha más próxima es <b>${whenLabel(earliestFrom(h))}</b>.` : '';
+  if (form.needed && form.needed < min) html += `<div class="ferr">Esa fecha es muy pronto. Elegí una desde ${whenLabel(earliestFrom(h))}.</div>`;
+  el.innerHTML = html;
+}
+
 function renderForm() {
   const el = $('#cForm');
   if (!el) return;
@@ -681,6 +770,7 @@ function renderForm() {
   el.innerHTML = `<div class="form">
     <h3>Tus datos</h3>
     <div class="field"><label class="l" for="fName">Nombre</label><input id="fName" type="text" autocomplete="name" value="${esc(form.name)}"></div>
+    <div class="field"><label class="l" for="fPhone">Tu WhatsApp</label><input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ej: 261 456 7890" value="${esc(form.phone)}"><p class="hint">Te escribimos por ahí para terminar el pedido.</p></div>
     <div class="field"><label class="l">¿Cómo lo recibís?</label>
       <label class="opt ${envio ? 'on' : ''}"><input type="radio" name="deliv" value="envio" ${envio ? 'checked' : ''}><span><b>Envío a domicilio</b><br><small>Mendoza. Calculamos un costo estimado con tu código postal.</small></span></label>
       ${s.allowPickup ? `<label class="opt ${!envio ? 'on' : ''}"><input type="radio" name="deliv" value="retiro" ${!envio ? 'checked' : ''}><span><b>${esc(s.pickupText || 'Retiro en persona')}</b></span></label>` : ''}
@@ -691,7 +781,9 @@ function renderForm() {
       <div id="shipMsg">${shipMsgHtml()}</div>
     </div>
     <div class="field"><label class="l" for="fAddr">Dirección (calle, número, barrio)</label><input id="fAddr" type="text" autocomplete="street-address" value="${esc(form.address)}"></div>` : ''}
+    <div class="field"><label class="l" for="fDate">¿Para cuándo lo necesitás? <span class="opt-tag">(opcional)</span></label><input id="fDate" type="date" value="${esc(form.needed)}" min="${minNeeded()}"><div class="hint" id="dateHint"></div></div>
   </div>`;
+  renderDateHint();
 }
 
 function shipMsgHtml() {
@@ -736,14 +828,14 @@ function renderCartFoot() {
   const extra = [...T.t.benefits.filter((b) => !/env[ií]o/i.test(b))];
   const shipTxt = T.freeShip ? 'Gratis' : ship && ship.ok ? money(ship.cost) : 'a confirmar';
   el.innerHTML = `
-    ${sent ? `<div class="sent">Se abrió WhatsApp con tu pedido. Si no se abrió, tocá el botón.<a class="btn wa" href="${esc(sent.url)}" target="_blank" rel="noopener">Abrir WhatsApp de nuevo</a></div>` : ''}
     ${hasDisc ? `<div class="sum"><span>Productos</span><span>${money(T.subtotal)}</span></div>` : ''}
     ${T.t.discount > 0 ? `<div class="sum disc"><span>Promo: ${esc(P.tierLabel(T.t.applied))}</span><span>-${money(T.t.discount)}</span></div>` : ''}
     ${T.cOk && T.cDisc > 0 ? `<div class="sum disc"><span>Cupón ${esc(couponRes.code)}</span><span>-${money(T.cDisc)}</span></div>` : ''}
     ${extra.map((b) => `<div class="sum disc"><span>${esc(b)}</span><span></span></div>`).join('')}
     <div class="sum total"><span>Total</span><b>${money(T.total)}</b></div>
     ${envio ? `<div class="sum"><span>Envío estimado · no incluido</span><span>${shipTxt}</span></div>` : ''}
-    <button class="btn wa" data-cact="send" style="margin-top:6px">Enviar pedido por WhatsApp</button>`;
+    <button class="btn" data-cact="send" style="margin-top:6px" ${sending ? 'disabled' : ''}>${sending ? 'Mandando…' : 'Mandar pedido'}</button>
+    <p class="small">Después de mandarlo, te escribimos por WhatsApp para confirmar todo.</p>`;
 }
 
 /* ---------- cupón ---------- */
@@ -819,6 +911,8 @@ function onCartInput(e) {
   const t = e.target;
   if (t.id === 'fName') form.name = t.value;
   else if (t.id === 'fAddr') form.address = t.value;
+  else if (t.id === 'fPhone') form.phone = t.value;
+  else if (t.id === 'fDate') { form.needed = t.value; renderDateHint(); }
   else if (t.id === 'fCoupon') { t.value = t.value.toUpperCase().replace(/\s+/g, ''); return; }
   else if (t.id === 'fCp') {
     t.value = t.value.replace(/\D/g, '').slice(0, 4);
@@ -853,54 +947,46 @@ function onCartClick(e) {
 }
 
 /* ---------- pedido por WhatsApp ---------- */
-function buildMessage(T) {
-  const L = [];
-  L.push(`Hola, soy ${form.name.trim()}. Quiero hacer este pedido:`);
-  L.push('');
-  T.v.forEach((x, i) => {
-    L.push(`${i + 1}) ${x.p.name} x${x.qty} - ${money(x.line)}`);
-    x.lines.forEach((l) => L.push(`   - ${l}`));
-    if (x.c.note) L.push(`   Aclaración: ${x.c.note}`);
-  });
-  L.push('');
-  if (T.t.discount > 0 || T.cOk) L.push(`Subtotal: ${money(T.subtotal)}`);
-  if (T.t.discount > 0) L.push(`Promo ${P.tierLabel(T.t.applied)}: -${money(T.t.discount)}`);
-  if (T.cOk) L.push(`Cupón ${couponRes.code}${T.cDisc ? ': -' + money(T.cDisc) : ''}`);
-  T.t.benefits.filter((b) => !/env[ií]o/i.test(b)).forEach((b) => L.push(`Beneficio: ${b}`));
-  L.push(`Total: ${money(T.total)}`);
-  return L.join('\n');
+function showDone() {
+  $('#drawer').innerHTML = `<button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
+    <div class="drawer-head"><h2>¡Pedido enviado!</h2></div>
+    <div class="drawer-body"><div class="done"><div class="ok" aria-hidden="true">✓</div>
+      <h3>Tu pedido ya fue mandado</h3>
+      <p>Nos comunicamos por <b>WhatsApp</b> al <b>${esc(form.phone)}</b> para terminar con todo.</p>
+      <p class="small">Ahí confirmamos tu pedido, el envío y cómo seguimos.</p></div></div>
+    <div class="drawer-foot"><button class="btn" data-cact="close">Seguir mirando</button></div>`;
 }
 
-function sendOrder() {
-  const s = S();
-  if (!cart.length) return;
-  if (!form.name.trim()) { toast('Escribí tu nombre'); const i = $('#fName'); if (i) i.focus(); return; }
+async function sendOrder() {
+  if (!cart.length || sending) return;
+  const focus = (id) => { const i = $(id); if (i) i.focus(); };
+  if (!form.name.trim()) { toast('Escribí tu nombre'); return focus('#fName'); }
+  if (form.phone.replace(/\D/g, '').length < 8) { toast('Escribí tu número de WhatsApp'); return focus('#fPhone'); }
   if (form.delivery === 'envio') {
-    if (!/^\d{4}$/.test(form.cp.trim())) { toast('Ingresá tu código postal'); const i = $('#fCp'); if (i) i.focus(); return; }
+    if (!/^\d{4}$/.test(form.cp.trim())) { toast('Ingresá tu código postal'); return focus('#fCp'); }
     if (ship && ship.reason === 'outside') { toast('Solo enviamos dentro de Mendoza'); return; }
-    if (!form.address.trim()) { toast('Escribí tu dirección'); const i = $('#fAddr'); if (i) i.focus(); return; }
+    if (!form.address.trim()) { toast('Escribí tu dirección'); return focus('#fAddr'); }
   }
-  if (!s.whatsapp) { toast('La tienda todavía no configuró su WhatsApp.'); return; }
+  if (form.needed && form.needed < minNeeded()) { toast('Elegí otra fecha: tus productos necesitan más anticipación'); return focus('#fDate'); }
   if (form.coupon && couponBusy) { toast('Verificando el cupón, esperá un segundo'); return; }
 
   const T = totals();
-  const url = `https://wa.me/${s.whatsapp}?text=${encodeURIComponent(buildMessage(T))}`;
-
-  // Se registra el pedido en el panel (si se toca dos veces no se duplica)
   const payload = {
-    name: form.name.trim(), items: couponItems(), coupon: T.cOk ? couponRes.code : '', token: orderToken,
-    delivery: form.delivery, cp: form.cp, address: form.address,
+    name: form.name.trim(), phone: form.phone, items: couponItems(), coupon: T.cOk ? couponRes.code : '', token: orderToken,
+    delivery: form.delivery, cp: form.cp, address: form.address, neededFor: form.needed || '',
     shipEstimate: form.delivery === 'envio' && ship && ship.ok && !T.freeShip ? ship.cost : null, vid, sid,
   };
+  sending = true; renderCartFoot();
+  let res;
   try {
-    fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }).catch(() => {});
-  } catch {}
-
-  sent = { url };
+    const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    res = await r.json();
+  } catch { res = { ok: false, message: 'No pudimos conectarnos. Probá de nuevo.' }; }
+  sending = false;
+  if (!res.ok) { toast(res.message || 'No se pudo mandar el pedido'); renderCartFoot(); if (res.field === 'phone') focus('#fPhone'); return; }
   persistForm();
-  renderCartFoot();
-  const w = window.open(url, '_blank');
-  if (!w) location.href = url;
+  cart = []; orderToken = uid(); persist(); renderCartBadge();
+  showDone();
 }
 
 /* ---------- eventos globales ---------- */
@@ -923,6 +1009,21 @@ function wireGlobal() {
     if (!$('#sheet').hidden) { if (!m || !cur || +m[1] !== cur.p.id) closeProduct(true); }
     else if (m && prodById(+m[1])) openProduct(+m[1], { fromUrl: true });
   });
+  let qT;
+  const tools = $('#tools');
+  if (tools) {
+    tools.addEventListener('input', (e) => {
+      if (e.target.id !== 'q') return;
+      query = e.target.value;
+      const c = $('#qClear'); if (c) c.hidden = !query;
+      clearTimeout(qT); qT = setTimeout(renderGrid, 120);
+    });
+    tools.addEventListener('click', (e) => {
+      if (!e.target.closest('#qClear')) return;
+      query = ''; renderTools(); renderGrid(); const q = $('#q'); if (q) q.focus();
+    });
+    tools.addEventListener('change', (e) => { if (e.target.id === 'sortBy') { sortBy = e.target.value; renderGrid(); } });
+  }
   $('#sheet').addEventListener('click', onSheetClick);
   $('#sheetOverlay').addEventListener('click', closeProduct);
   $('#cartOverlay').addEventListener('click', closeCart);

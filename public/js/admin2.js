@@ -66,6 +66,15 @@ FL.views.dashboard = async function () {
       ${stat('Rechazadas', num(s.sales.rejected), '')}
     </div>
 
+    ${s.sources && s.sources.length > 1 ? `
+    <div class="card">
+      <h3 class="ct">De dónde llegan</h3>
+      <p class="hint">Solo los últimos ${s.keep_days || 90} días. Podés generar links con <code>?origen=instagram</code> o <code>?origen=whatsapp</code> al final de la dirección de tu tienda.</p>
+      <table class="ptab"><thead><tr><th>Origen</th><th>Visitas</th><th>Carritos</th><th>Pedidos</th><th>Ventas</th><th>Ingresos</th></tr></thead><tbody>
+        ${s.sources.map((r) => `<tr><td><b>${esc(r.src)}</b></td><td>${num(r.visits)}</td><td>${num(r.carts)}</td><td>${num(r.orders)}</td><td>${num(r.sales)}</td><td>${money(r.revenue)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>` : ''}
+
     <div class="card">
       <h3 class="ct">Del primer vistazo a la venta</h3>
       ${steps.map(([l, v], i) => `
@@ -129,6 +138,7 @@ function orderCard(o, isNew) {
   return `<div class="ocard ${isNew ? 'new' : ''}">
     <div class="ohead"><b>${isNew ? '<span class="newtag">NUEVO</span> ' : ''}#${o.id} · ${esc(o.name)}</b><span class="badge ${BADGE[o.status]}">${STATUS_LABEL[o.status]}</span></div>
     <div class="ometa">${fdate(o.created_at)} · ${deliv}</div>
+    ${o.phone || o.needed_for ? `<div class="ometa">${o.phone ? `WhatsApp <b>+${esc(o.phone)}</b> <a class="btn sec sm" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}?text=${encodeURIComponent('Hola ' + String(o.name).split(' ')[0] + ', te escribimos por tu pedido #' + o.id + '.')}">Escribirle</a>` : ''}${o.needed_for ? ` ${o.phone ? '· ' : ''}Lo necesita para el <b>${esc(o.needed_for.split('-').reverse().join('/'))}</b>` : ''}</div>` : ''}
     <ul class="oitems">${items}</ul>
     ${extra.length ? `<div class="oextra">${extra.join(' · ')}</div>` : ''}
     <div class="ototal">Total del pedido <b>${money(o.total)}</b></div>

@@ -268,3 +268,39 @@ a { touch-action: manipulation; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Buscador y orden ---------- */
+.tools { margin: 0 0 12px; }
+.tl { display: flex; gap: 8px; }
+.srch { position: relative; flex: 1; min-width: 0; }
+.srch svg { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+.srch input { width: 100%; border: 1.5px solid var(--line); border-radius: 999px; padding: 10px 38px 10px 38px; background: var(--surface); font-size: 16px; -webkit-appearance: none; appearance: none; }
+.srch button { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--veil); font-size: 1.1rem; line-height: 1; }
+.tl select { flex: none; max-width: 46%; border: 1.5px solid var(--line); border-radius: 999px; padding: 10px 12px; background: var(--surface); font-size: 16px; }
+@media (max-width: 420px) { .tl { flex-direction: column; } .tl select { max-width: none; width: 100%; } }
+
+/* ---------- Tiempo de anticipación ---------- */
+.lead { display: flex; align-items: center; gap: 5px; margin-top: 4px; font-size: .78rem; color: var(--p-dark); font-weight: 600; line-height: 1.25; }
+.lead svg, .lead-box svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.lead-box { display: flex; gap: 10px; align-items: flex-start; background: var(--p-soft); border: 1px solid var(--p-pale); border-radius: 14px; padding: 10px 12px; margin: 0 0 12px; color: var(--p-dark); }
+.lead-box svg { width: 22px; height: 22px; margin-top: 1px; }
+.lead-box b { display: block; font-size: .95rem; }
+.lead-box span { font-size: .85rem; color: #5a4553; }
+.opt-tag { font-weight: 400; color: var(--muted); }
+#dateHint { margin-top: 5px; }
+#dateHint .ferr { color: var(--bad); font-weight: 600; margin-top: 4px; }
+
+/* ---------- Botón flotante de WhatsApp ---------- */
+.wa-float {
+  position: fixed; right: 16px; bottom: calc(18px + var(--safe-b)); z-index: 35; width: 58px; height: 58px; border-radius: 50%;
+  background: #25D366; color: #fff; display: grid; place-items: center; box-shadow: 0 8px 22px -6px rgba(0,0,0,.45);
+}
+.wa-float svg { width: 32px; height: 32px; }
+.wa-float:hover { background: #1fb457; }
+body.lock .wa-float { display: none; }
+
+/* ---------- Pedido enviado ---------- */
+.done { text-align: center; padding: 40px 10px; }
+.done .ok { width: 68px; height: 68px; border-radius: 50%; background: #E3F3EA; color: var(--ok); display: grid; place-items: center; margin: 0 auto 14px; font-size: 2.1rem; }
+.done h3 { font-family: var(--display); font-size: 1.6rem; margin: 0 0 10px; }
+.done p { margin: 0 auto 8px; max-width: 32ch; }
