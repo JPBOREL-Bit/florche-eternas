@@ -2,7 +2,7 @@ self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch {}
   e.waitUntil(self.registration.showNotification(d.title || 'Florche.Eternas', {
-    body: d.body || '', icon: '/icon-192.png', badge: '/icon-192.png', tag: d.tag || 'default',
+    body: d.body || '', tag: d.tag || 'default',
     data: { url: d.url || '/admin' }, vibrate: [200, 100, 200],
   }));
 });

@@ -4,9 +4,10 @@ const FL = window.FL;
 const { $, esc, api, run, toast } = FL;
 
 FL.views.push = async function viewPush() {
+  const sub = await getSub();
   const [keyR, statusR] = await Promise.all([
     run(() => api('/api/admin/push/key')),
-    fetch('/api/admin/push/status?' + new URLSearchParams({ endpoint: (await getSub()).endpoint || '' })).then(r => r.json()).catch(() => ({ count: 0, subscribed: false })),
+    api('/api/admin/push/status?endpoint=' + encodeURIComponent(sub.endpoint || '')).catch(() => ({ count: 0, subscribed: false })),
   ]);
   if (!keyR) return;
   const sup = keyR.supported && ('serviceWorker' in navigator) && ('PushManager' in window);

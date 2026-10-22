@@ -60,6 +60,10 @@ const DEFAULT_SETTINGS = {
   reviewsOn: true,
   reviewBannedWords: reviewsLib.DEFAULT_BANNED,
   showLikes: false,
+  // Pagos
+  payOn: false,
+  payAlias: '',
+  payHolder: '',
   // Botón flotante de WhatsApp
   waFloatOn: true,
   waFloatText: 'Hola, tengo una consulta sobre sus flores',
@@ -79,7 +83,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const NUM_KEYS = ['pricePerKm', 'kmMultiplier', 'shippingBase', 'shippingMin', 'shippingRound', 'wholesaleMin'];
-const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes', 'wholesaleOn', 'waFloatOn'];
+const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes', 'wholesaleOn', 'waFloatOn', 'payOn'];
 const ID_KEYS = ['logoId', 'heroImageId'];
 
 async function getSettings() {
@@ -318,6 +322,43 @@ async function initDb() {
       updated_at timestamptz not null default now()
     );
     create table if not exists calc_config (k text primary key, v numeric not null);
+
+    create table if not exists accounts (
+      id serial primary key,
+      username text,
+      email text,
+      pass_hash text,
+      google_sub text unique,
+      name text not null default '',
+      phone text,
+      address text,
+      status text not null default 'activa',
+      must_change boolean not null default false,
+      device text,
+      last_device text,
+      token_ver int not null default 0,
+      created_at timestamptz not null default now(),
+      last_login timestamptz
+    );
+    create unique index if not exists accounts_username_u on accounts (lower(username)) where username is not null;
+    create unique index if not exists accounts_email_u on accounts (lower(email)) where email is not null;
+    create table if not exists password_resets (
+      id serial primary key,
+      account_id int references accounts(id) on delete cascade,
+      ident text not null,
+      phone text,
+      status text not null default 'pendiente',
+      created_at timestamptz not null default now()
+    );
+    alter table orders add column if not exists account_id int references accounts(id) on delete set null;
+    alter table orders add column if not exists token text;
+    alter table orders add column if not exists paid boolean not null default false;
+    alter table orders add column if not exists paid_at timestamptz;
+    alter table orders add column if not exists pay_id text;
+    alter table orders add column if not exists pay_status text;
+    alter table orders add column if not exists pay_amount numeric;
+    alter table orders add column if not exists mp_pref_id text;
+    create index if not exists orders_account on orders(account_id);
 
     create table if not exists coupons (
       id serial primary key,
@@ -733,6 +774,7 @@ app.get('/api/store', wrap(async (req, res) => {
     if (!settings.showLikes) delete f.likes; // los clientes no ven la cantidad salvo que lo actives
     return f;
   });
+  settings.payReady = !!settings.payOn && !!(process.env.MP_ACCESS_TOKEN || '').trim();
   res.json({ settings, categories: cats.rows, products, reviews });
 }));
 
@@ -912,6 +954,9 @@ const ctx = { app, q, auth, wrap, rateOk, getSettings, jwtSecret: JWT_SECRET, po
 // Primero las notificaciones, para que pedidos y mayoristas puedan avisar al celular
 const pushApi = require('./lib/push.js').mount(ctx);
 ctx.notify = pushApi.notify;
+ctx.getAccount = require('./lib/accounts.js').mount(ctx).getAccount;
+ctx.publicUrl = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || '';
+require('./lib/payments.js').mount(ctx);
 const revApi = reviewsLib.mount(ctx);
 require('./lib/coupons.js').mount(ctx);
 require('./lib/orders.js').mount(ctx);

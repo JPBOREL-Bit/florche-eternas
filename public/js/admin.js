@@ -505,6 +505,23 @@ async function loadPostal() {
 }
 
 /* ---------- Mi tienda ---------- */
+async function paintPay() {
+  const box = document.getElementById('payBox');
+  if (!box) return;
+  let p = {};
+  try { p = await api('/api/admin/payments/status'); } catch { }
+  const esc2 = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const st = p.configured
+    ? (p.mode === 'real' ? '<span style="color:var(--ok);font-weight:700">● Activo (cuenta real)</span>' : `<span style="color:#8a5a00;font-weight:700">● Modo ${esc2(p.mode)} (cobros de prueba)</span>`)
+    : '<span style="color:var(--bad);font-weight:700">● Sin conectar</span>';
+  box.innerHTML = `<p style="margin:0 0 8px">Estado: ${st}</p>
+    ${!p.configured ? '<p class="hint">Para activarlo, pegá tu clave de Mercado Pago en Render (variable <b>MP_ACCESS_TOKEN</b>) y reiniciá. Mientras tanto no aparece el botón "Terminar pedido".</p>' : ''}
+    <label class="chk" style="margin-bottom:10px"><input type="checkbox" data-s="payOn" ${p.payOn ? 'checked' : ''}> Ofrecer "Terminar pedido" (pagar con Mercado Pago) en la tienda</label>
+    <div class="field"><label class="l">Alias para transferencia</label><input type="text" data-s="payAlias" value="${esc2(p.alias)}" placeholder="Ej: florche.eternas"></div>
+    <div class="field"><label class="l">Titular del alias</label><input type="text" data-s="payHolder" value="${esc2(p.holder)}" placeholder="Nombre y apellido"></div>
+    <p class="hint">Aviso de Mercado Pago (para confirmar pagos solo): <code>${esc2(p.webhook)}</code></p>`;
+}
+
 function viewStore() {
   const s = data.settings;
   const f = (k, label, extra = '', hint = '') => `<div class="field"><label class="l">${label}</label><input type="text" data-s="${k}" value="${esc(s[k])}" ${extra}>${hint ? `<p class="hint">${hint}</p>` : ''}</div>`;
@@ -518,6 +535,8 @@ function viewStore() {
       <div class="field"><label class="l">Sobre vos / tu emprendimiento</label><textarea data-s="about">${esc(s.about)}</textarea></div>
       ${f('whatsapp', 'Tu WhatsApp (adonde llegan los pedidos)', 'inputmode="tel"', 'Con código de país, sin + ni espacios ni 0 ni 15. Ejemplo celular de Mendoza: 5492614567890')}
       ${f('instagram', 'Instagram (usuario o link)', '', 'Ej: florche.eternas')}
+      <h3 style="margin:16px 0 8px;font-size:1rem">Cobro con Mercado Pago</h3>
+      <div id="payBox" class="card" style="margin:0 0 12px"><p class="hint" style="margin:0">Cargando…</p></div>
       <h3 style="margin:16px 0 8px;font-size:1rem">Botón flotante de WhatsApp</h3>
       <label class="chk" style="margin-bottom:12px"><input type="checkbox" data-s="waFloatOn" ${s.waFloatOn ? 'checked' : ''}> Mostrar el botón flotante de WhatsApp en toda la tienda</label>
       <div class="field"><label class="l">Mensaje pre-cargado del botón</label><input type="text" data-s="waFloatText" value="${esc(s.waFloatText || '')}" placeholder="Hola, tengo una consulta sobre sus flores"><p class="hint">El cliente lo puede editar antes de enviar.</p></div>
@@ -541,6 +560,7 @@ function viewStore() {
     </div>`;
   $('#logoFile').onchange = (e) => setImageSetting(e, 'logoId', { kind: 'logo' });
   $('#heroFile').onchange = (e) => setImageSetting(e, 'heroImageId', { kind: 'banner' });
+  paintPay();
 }
 async function setImageSetting(e, key, opts) {
   const f = e.target.files[0];

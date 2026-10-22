@@ -138,6 +138,7 @@ function orderCard(o, isNew) {
   return `<div class="ocard ${isNew ? 'new' : ''}">
     <div class="ohead"><b>${isNew ? '<span class="newtag">NUEVO</span> ' : ''}#${o.id} · ${esc(o.name)}</b><span class="badge ${BADGE[o.status]}">${STATUS_LABEL[o.status]}</span></div>
     <div class="ometa">${fdate(o.created_at)} · ${deliv}</div>
+    ${o.paid ? `<div class="oextra" style="color:var(--ok);font-weight:700">✓ Pagado con Mercado Pago${o.pay_amount ? ' · ' + money(o.pay_amount) : ''}</div>` : (o.pay_status && o.pay_status !== 'approved' ? `<div class="oextra">Pago: ${esc(o.pay_status)}</div>` : '')}
     ${o.phone || o.needed_for ? `<div class="ometa">${o.phone ? `WhatsApp <b>+${esc(o.phone)}</b> <a class="btn sec sm" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}?text=${encodeURIComponent('Hola ' + String(o.name).split(' ')[0] + ', te escribimos por tu pedido #' + o.id + '.')}">Escribirle</a>` : ''}${o.needed_for ? ` ${o.phone ? '· ' : ''}Lo necesita para el <b>${esc(o.needed_for.split('-').reverse().join('/'))}</b>` : ''}</div>` : ''}
     <ul class="oitems">${items}</ul>
     ${extra.length ? `<div class="oextra">${extra.join(' · ')}</div>` : ''}

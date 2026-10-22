@@ -42,18 +42,19 @@ Creá un repositorio, clonalo **fuera de OneDrive**, descomprimí el zip adentro
 | `DATABASE_URL` | la cadena de Supabase |
 | `ADMIN_PASSWORD` | la contraseña para entrar al panel |
 | `JWT_SECRET` | cualquier frase larga |
-| `GOOGLE_CLIENT_ID` | para las reseñas (ver sección **Reseñas**). Podés agregarla más tarde |
+| `GOOGLE_CLIENT_ID` | para las reseñas y el ingreso con Google (ver sección **Reseñas**). Podés agregarla más tarde |
+| `MP_ACCESS_TOKEN` | clave de Mercado Pago, solo si querés cobrar con "Terminar pedido" (ver sección **Mercado Pago**) |
 
 ---
 
 ## Qué hay en el panel (`/admin`)
 
-**Resumen** – Visitantes, carritos creados, pedidos enviados a WhatsApp, ventas realizadas, rechazadas, pendientes y **Ganancias**. Podés ver Hoy, 7 días, 30 días o Todo. Incluye el recorrido de la venta (entraron → vieron un producto → agregaron al carrito → enviaron pedido → venta realizada), gráficos por día y una tabla por producto (cuánta gente lo vio, cuántos lo agregaron al carrito y cuánto vendió).
+**Resumen** – Visitantes, carritos creados, pedidos mandados, ventas realizadas, rechazadas, pendientes y **Ganancias**. Podés ver Hoy, 7 días, 30 días o Todo. Incluye el recorrido de la venta (entraron → vieron un producto → agregaron al carrito → enviaron pedido → venta realizada), gráficos por día y una tabla por producto (cuánta gente lo vio, cuántos lo agregaron al carrito y cuánto vendió).
 Tus propias visitas desde el panel no se cuentan.
 
-**Pedidos** – Cada vez que un cliente toca "Enviar pedido por WhatsApp" queda registrado acá y, si tenés el panel abierto, aparece una **alerta** (con el nombre y el total) y un contador en la pestaña. Marcás cada pedido como **Venta realizada** (suma a Ganancias) o **Venta rechazada**. Podés volver a ponerlo en pendiente o borrarlo.
-> La alerta funciona con el panel abierto en el navegador. Cuando no lo tenés abierto, el pedido igual te llega por WhatsApp y lo ves en Pedidos al entrar.
-Al **rechazar** un pedido se borran los datos del cliente y del pedido (sin vuelta atrás; el Resumen conserva solo el conteo), por eso pide confirmación.
+**Pedidos** – Cada vez que un cliente toca **Mandar pedido** queda registrado acá con su nombre, **WhatsApp** (con un botón **Escribirle**), la dirección, para cuándo lo necesita y si **pagó con Mercado Pago**. Cuando entra uno nuevo te suena una alerta en el panel y te llega la notificación al celular (ver **Notificaciones**). Los marcás como **Venta realizada** o **Rechazar**. Al **rechazar** se borran los datos del cliente y del pedido (sin vuelta atrás, por eso pide confirmación; el Resumen conserva solo el conteo).
+
+**Cuentas** – Clientas con cuenta, solicitudes de "olvidé mi contraseña", dispositivo y bloqueo (ver sección **Cuentas de clientes**).
 
 **Mayoristas** – Solicitudes de compradores por mayor, compradores aceptados y sus compras (ver sección **Mayoristas**).
 
@@ -67,7 +68,9 @@ Al **rechazar** un pedido se borran los datos del cliente y del pedido (sin vuel
 
 **Envíos** – Tu código postal, precio por km y mínimo. El sistema busca solo los km (solo Mendoza). El envío es **solo orientativo**: se muestra al cliente pero no se suma al total ni va en el mensaje de WhatsApp.
 
-**Mi tienda** – Nombre, textos, WhatsApp, color, logo y **banner de portada** (conviene una foto horizontal, por ejemplo 1600×600; se muestra completa). El botón "Optimizar fotos ya subidas" comprime las fotos que subiste antes.
+**Notificaciones** – Activar los avisos al celular Android (ver sección **Notificaciones en el celular**).
+
+**Mi tienda** – Nombre, textos, WhatsApp, **botón flotante de WhatsApp**, **cobro con Mercado Pago**, color, logo y **banner de portada** (conviene una foto horizontal, por ejemplo 1600×600; se muestra completa). El botón "Optimizar fotos ya subidas" comprime las fotos que subiste antes.
 
 ## Reseñas
 
@@ -143,13 +146,74 @@ Los datos de texto (pedidos, productos, reseñas) pesan muy poco; lo que más oc
 
 Al tocar "Vaciar carrito" aparece una cajita en el medio de la pantalla con **Sí** y **No**.
 
-## El mensaje de WhatsApp
+## Cómo se manda un pedido
 
-Lleva solo el saludo con el nombre y el pedido (con las opciones elegidas y aclaraciones), sin emojis y sin envío. Si hubo descuentos o cupón, se agregan líneas con el subtotal, el descuento y el total final.
+En el carrito la clienta completa **nombre y WhatsApp** (obligatorios), cómo lo recibe (envío a domicilio con código postal y dirección, o punto de encuentro) y, si quiere, **para cuándo lo necesita**. Después elige:
+
+- **Mandar pedido:** el pedido se guarda en la pestaña **Pedidos** del panel y le aparece "Tu pedido ya fue mandado, nos comunicamos por WhatsApp para terminar con todo". **Ya no se abre WhatsApp solo**: sos vos quien le escribe desde el panel, con el botón **Escribirle** que trae el pedido.
+- **Terminar pedido** (solo aparece si activaste Mercado Pago, ver más abajo): guarda el pedido y la lleva a pagar los productos. El envío **no** va incluido en ese pago: se coordina aparte por WhatsApp.
+
+Al **rechazar** un pedido en el panel se borran los datos del cliente y del pedido (no se puede deshacer, por eso pide confirmación). El Resumen conserva solo el conteo.
 
 ## Fotos
 
 Todas las fotos se comprimen solas: primero en el navegador y después de nuevo en el servidor. Una foto de celular de varios MB queda en unas decenas de KB, con una miniatura aparte para el catálogo.
+
+## Botón flotante de WhatsApp, buscador y favoritos
+
+- **Botón flotante de WhatsApp:** círculo verde abajo a la derecha en toda la tienda. Usa el número de WhatsApp de **Mi tienda**. Ahí mismo lo podés apagar y cambiar el mensaje que sale escrito.
+- **Buscador:** busca por nombre y descripción sin importar mayúsculas ni tildes ("rámo" encuentra "ramo"). Al lado hay un selector de orden (destacados, menor precio, mayor precio, con descuento primero).
+- **Favoritos:** además del corazón de cada producto hay un filtro **♥ Favoritos (n)** junto a las categorías.
+
+## Tiempo de anticipación
+
+En el editor de cada producto ponés el **tiempo de anticipación en horas** (0 = sin anticipación; 48 = pedir con 2 días). Los clientes ven en la tarjeta "Pedir con 2 días de anticipación" y en la ficha del producto "Si lo pedís ahora, lo tenés desde el jueves 15/10". En el carrito, el campo **"¿Para cuándo lo necesitás?"** no deja elegir una fecha antes de lo que necesitan los productos del pedido (usa el producto que más anticipación pide). En Pedidos ves "Lo necesita para el dd/mm/aaaa".
+
+## De dónde llegan los clientes
+
+En el **Resumen** hay una tabla **De dónde llegan** (visitas, carritos, pedidos, ventas e ingresos por origen) de los últimos 90 días. Para saber de dónde viene cada persona, usá estos links:
+
+- `tutienda.com/?origen=instagram` (para la bio de Instagram)
+- `tutienda.com/?origen=whatsapp` (para el estado o los mensajes)
+- `tutienda.com/?origen=facebook`, `?origen=tiktok`, o el nombre que quieras (letras y números)
+
+Si no hay `?origen=`, se detecta solo por la página desde donde llegó (Instagram, Facebook, WhatsApp, Google, TikTok, YouTube) o queda como "directo". Los links que se comparten con el botón Compartir de cada producto quedan como "compartir".
+
+## Notificaciones en el celular (Android)
+
+En la pestaña **Notificaciones** tocá **Activar en este celular** (con Chrome en Android) y aceptá el permiso. A partir de ahí te llega un aviso por cada **pedido nuevo**, **solicitud de mayorista**, **pago confirmado** y **olvido de contraseña**, aunque el panel esté cerrado. Hay un botón para probarlo. Las claves se generan solas la primera vez. **No funciona en iPhone.** Cada celular o computadora se activa por separado, y los que dejan de existir se limpian solos.
+
+## Cuentas de clientes
+
+Las clientas **no necesitan cuenta para comprar**. La cuenta es solo una comodidad: guarda sus datos (se completan solos en el carrito) y muestra "Mis pedidos" con el estado de cada uno (y si fue pagado). En la tienda hay un botón **Ingresar** en el encabezado.
+
+- **Crear cuenta:** con un **usuario** o un **Gmail** y una contraseña de **mínimo 8 caracteres**. Pide nombre y WhatsApp (obligatorio, solo se escribe).
+- **Con Google:** usa el mismo ID de cliente de las reseñas (`GOOGLE_CLIENT_ID`). La primera vez pide el WhatsApp.
+- Las contraseñas se guardan **cifradas** (nadie, ni vos, puede verlas). Después de 6 intentos fallidos se frena el ingreso 15 minutos.
+- **Si alguien creó una cuenta con tu Gmail antes que vos**, al entrar con Google la cuenta pasa a ser tuya y esa contraseña deja de funcionar.
+
+### Olvidé mi contraseña (desde el panel)
+
+1. La clienta toca **Olvidé mi contraseña** y escribe su usuario o email y su WhatsApp. No se le muestra ningún dato de la cuenta.
+2. En el panel, pestaña **Cuentas**, te aparece la solicitud (con aviso y contador) mostrando el número que escribió y el que tiene registrado en la cuenta, para que veas si coinciden.
+3. Le escribís por WhatsApp para confirmar que es ella. Si es, tocás **Crear contraseña**: la elegís vos o se genera una al azar. Se la pasás por WhatsApp (hay un botón que abre el mensaje ya escrito).
+4. Cuando ella entra con esa contraseña temporal, el sistema le pide **crear una nueva** antes de seguir. La temporal deja de servir.
+5. Volvés al panel y tocás **Finalizado** (se borra la solicitud). **Rechazar** también la borra, sin crear nada.
+
+### Controlar las cuentas
+
+En **Cuentas** ves cada cuenta con nombre, usuario o email, WhatsApp, **fecha de alta**, **modelo del dispositivo** con el que se creó (por ejemplo "SM-A546E (Android 13) · Chrome"), último ingreso y cantidad de pedidos. Podés **bloquear** (se le cierra la sesión al instante) o **eliminar** (los pedidos quedan en Pedidos). Hay un buscador. *Nota: Chrome en algunos celulares oculta el modelo exacto; en ese caso figura solo "Android".*
+
+## Mercado Pago ("Terminar pedido")
+
+Cobra solo los **productos**; el envío se coordina por WhatsApp. Para activarlo:
+
+1. En Mercado Pago, sección **Tu negocio > Credenciales** (o *Developers*), copiá el **Access Token**. El de prueba empieza con `TEST-` y el real con `APP_USR-`.
+2. En Render, **Environment**, agregá `MP_ACCESS_TOKEN` con ese valor y guardá. **No lo pegues en el chat ni en GitHub.**
+3. En el panel, **Mi tienda > Cobro con Mercado Pago**, tildá "Ofrecer Terminar pedido". Ahí ves el estado: *Modo prueba* o *Activo (cuenta real)*.
+4. En Mercado Pago, configurá el **aviso de pagos (webhook)** con la dirección que figura en esa misma sección (`https://tu-tienda.onrender.com/api/mp/webhook`).
+
+El botón **Terminar pedido** aparece recién cuando está tildado **y** la clave está puesta. El pago se confirma **solo**, cuando Mercado Pago avisa al servidor (el servidor le pregunta a Mercado Pago si el pago está aprobado y por qué monto; lo que diga el navegador del cliente no cuenta). En Pedidos aparece "✓ Pagado con Mercado Pago" y te llega una notificación. Empezá probando con el token `TEST-` y un usuario de prueba de Mercado Pago antes de cobrar de verdad. Tené en cuenta que Mercado Pago cobra una comisión por venta.
 
 ## Que la tienda no se duerma (plan gratis de Render)
 

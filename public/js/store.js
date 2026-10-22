@@ -204,6 +204,7 @@ async function init() {
   if (window.FLReviews) window.FLReviews.renderSection($('#reviews'), store.reviews, { lock: lockScroll, unlock: unlockScroll });
   if (newSession) track('visit', null, null, { src: sourceOf() });
   if (form.coupon && cart.length) checkCoupon();
+  checkReturnFromPay();
   // Link de un producto (/p/12-nombre): se abre directo
   const m = /^\/p\/(\d+)/.exec(location.pathname);
   if (m) {
@@ -643,7 +644,6 @@ function renderCartBadge() {
 
 function cartChanged() {
   orderToken = uid();   // un carrito distinto es un pedido distinto
-  sent = null;
   persist();
   renderCartBadge();
   if (!$('#drawer').hidden) refreshCart();
@@ -762,6 +762,18 @@ function renderDateHint() {
   el.innerHTML = html;
 }
 
+// Cuando la clienta ingresa a su cuenta, se completan solos sus datos (sin pisar lo que ya escribió)
+document.addEventListener('fl:account', (e) => {
+  const a = e.detail;
+  if (!a || a.mustChange) return;
+  const ph = /^549\d{10}$/.test(a.phone || '') ? `${a.phone.slice(3, 6)} ${a.phone.slice(6, 9)} ${a.phone.slice(9)}` : (a.phone || '');
+  let ch = false;
+  if (!form.name && a.name) { form.name = a.name; ch = true; }
+  if (!form.phone && ph) { form.phone = ph; ch = true; }
+  if (!form.address && a.address) { form.address = a.address; ch = true; }
+  if (ch) { persistForm(); if ($('#drawer') && !$('#drawer').hidden && cart.length) renderCart(); }
+});
+
 function renderForm() {
   const el = $('#cForm');
   if (!el) return;
@@ -769,6 +781,7 @@ function renderForm() {
   const envio = form.delivery === 'envio';
   el.innerHTML = `<div class="form">
     <h3>Tus datos</h3>
+    ${window.FLAccount && !window.FLAccount.me ? '<p class="hint acct-nudge">¿Ya tenés cuenta? <button type="button" data-acct="login">Ingresá</button> y completamos tus datos.</p>' : ''}
     <div class="field"><label class="l" for="fName">Nombre</label><input id="fName" type="text" autocomplete="name" value="${esc(form.name)}"></div>
     <div class="field"><label class="l" for="fPhone">Tu WhatsApp</label><input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ej: 261 456 7890" value="${esc(form.phone)}"><p class="hint">Te escribimos por ahí para terminar el pedido.</p></div>
     <div class="field"><label class="l">¿Cómo lo recibís?</label>
@@ -835,7 +848,8 @@ function renderCartFoot() {
     <div class="sum total"><span>Total</span><b>${money(T.total)}</b></div>
     ${envio ? `<div class="sum"><span>Envío estimado · no incluido</span><span>${shipTxt}</span></div>` : ''}
     <button class="btn" data-cact="send" style="margin-top:6px" ${sending ? 'disabled' : ''}>${sending ? 'Mandando…' : 'Mandar pedido'}</button>
-    <p class="small">Después de mandarlo, te escribimos por WhatsApp para confirmar todo.</p>`;
+    ${S().payReady ? `<button class="btn wa" data-cact="pay" style="margin-top:8px" ${sending ? 'disabled' : ''}>Terminar pedido (pagar con Mercado Pago)</button>` : ''}
+    <p class="small">${S().payReady ? '"Mandar pedido" lo guarda y te escribimos por WhatsApp para terminar todo. "Terminar pedido" te lleva a pagar los productos con Mercado Pago: el envío no está incluido y se coordina aparte por WhatsApp.' : 'Después de mandarlo, te escribimos por WhatsApp para confirmar todo.'}</p>`;
 }
 
 /* ---------- cupón ---------- */
@@ -935,6 +949,7 @@ function onCartClick(e) {
   if (a === 'close') return closeCart();
   if (a === 'ship') return calcShip();
   if (a === 'send') return sendOrder();
+  if (a === 'pay') return sendOrder(true);
   if (a === 'cpnopen') { couponOpen = true; renderCoupon(); const i = $('#fCoupon'); if (i) i.focus(); return; }
   if (a === 'applycoupon') return applyCoupon();
   if (a === 'rmcoupon') { form.coupon = ''; couponRes = null; couponOpen = false; couponMsg = ''; couponReq++; persistForm(); renderCoupon(); renderCartFoot(); return; }
@@ -957,7 +972,9 @@ function showDone() {
     <div class="drawer-foot"><button class="btn" data-cact="close">Seguir mirando</button></div>`;
 }
 
-async function sendOrder() {
+let lastOrder = null;   // pedido mandado en esta visita: { id, token }
+
+async function sendOrder(thenPay) {
   if (!cart.length || sending) return;
   const focus = (id) => { const i = $(id); if (i) i.focus(); };
   if (!form.name.trim()) { toast('Escribí tu nombre'); return focus('#fName'); }
@@ -985,8 +1002,41 @@ async function sendOrder() {
   sending = false;
   if (!res.ok) { toast(res.message || 'No se pudo mandar el pedido'); renderCartFoot(); if (res.field === 'phone') focus('#fPhone'); return; }
   persistForm();
+  lastOrder = { id: res.id, token: orderToken };
+  if (thenPay) return payOrder(lastOrder);
   cart = []; orderToken = uid(); persist(); renderCartBadge();
   showDone();
+}
+
+async function payOrder(o) {
+  sending = true; renderCartFoot();
+  let r;
+  try {
+    const x = await fetch(`/api/orders/${o.id}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: o.token }) });
+    r = await x.json();
+  } catch { r = { ok: false, message: 'No pudimos conectarnos. Probá de nuevo.' }; }
+  sending = false;
+  if (r.paid) { cart = []; orderToken = uid(); persist(); renderCartBadge(); return toast(r.message); }
+  if (!r.ok || !r.url) { toast(r.message || 'No pudimos abrir el pago.'); renderCartFoot(); return; }
+  cart = []; orderToken = uid(); persist(); renderCartBadge();
+  location.href = r.url;     // a Mercado Pago
+}
+
+/* Al volver de Mercado Pago: se muestra el resultado. La confirmación real llega por el aviso de Mercado Pago. */
+function checkReturnFromPay() {
+  const p = new URLSearchParams(location.search);
+  const st = p.get('pago'), id = p.get('pedido');
+  if (!st || !id) return;
+  history.replaceState(null, '', '/');
+  const msg = st === 'ok' ? '¡Gracias! Recibimos tu pago. Te escribimos por WhatsApp para coordinar el envío.'
+    : st === 'pendiente' ? 'Tu pago quedó pendiente de confirmación. Te escribimos por WhatsApp cuando se confirme.'
+    : 'El pago no se completó. Podés intentarlo de nuevo o terminar el pedido por WhatsApp.';
+  openCart();
+  $('#drawer').innerHTML = `<button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
+    <div class="drawer-head"><h2>${st === 'ok' ? '¡Pago recibido!' : 'Pago'}</h2></div>
+    <div class="drawer-body"><div class="done"><div class="ok" aria-hidden="true">${st === 'ok' ? '✓' : '!'}</div>
+      <h3>Pedido #${esc(id)}</h3><p>${esc(msg)}</p></div></div>
+    <div class="drawer-foot"><button class="btn" data-cact="close">Listo</button></div>`;
 }
 
 /* ---------- eventos globales ---------- */
