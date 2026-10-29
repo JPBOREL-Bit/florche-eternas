@@ -225,7 +225,7 @@ async function moveItem(table, arr, i, d, after) {
   after();
 }
 
-const blankProduct = () => ({ name: '', description: '', base_price: 0, category_id: data.categories[0] ? data.categories[0].id : null, images: [], groups: [], active: true, pinned: false, discount_type: '', discount_value: 0, discount_ends: null, lead_hours: 0 });
+const blankProduct = () => ({ name: '', description: '', base_price: 0, category_id: data.categories[0] ? data.categories[0].id : null, images: [], groups: [], active: true, pinned: false, discount_type: '', discount_value: 0, discount_ends: null, lead_hours: 0, weight_g: 0, dim_h: 0, dim_w: 0, dim_l: 0 });
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 function openEditor(p, id) {
@@ -255,6 +255,10 @@ function renderEditor() {
         </div>
         <div class="field"><label class="l">Tiempo de anticipación (en horas)</label><input type="number" min="0" max="2160" step="1" data-path="lead_hours" value="${esc(ed.lead_hours || 0)}">
           <p class="hint">Cuántas horas antes hay que pedirlo. Los clientes lo ven en el producto y el carrito les avisa la fecha más próxima. 0 = sin anticipación. Por ejemplo: 48 = pedir con 2 días.</p></div>
+        <div class="field"><label class="l">Peso y medidas para el envío por correo (opcional)</label>
+          <div class="grid2"><input type="number" min="0" max="60000" data-path="weight_g" value="${esc(ed.weight_g || 0)}" placeholder="Peso (gramos)"><input type="number" min="0" max="300" data-path="dim_h" value="${esc(ed.dim_h || 0)}" placeholder="Alto (cm)"></div>
+          <div class="grid2" style="margin-top:6px"><input type="number" min="0" max="300" data-path="dim_w" value="${esc(ed.dim_w || 0)}" placeholder="Ancho (cm)"><input type="number" min="0" max="300" data-path="dim_l" value="${esc(ed.dim_l || 0)}" placeholder="Largo (cm)"></div>
+          <p class="hint">Peso en gramos y medidas en centímetros de la caja ya armada. Andreani y Correo Argentino cotizan con esto. Si lo dejás en 0 se usan las medidas por defecto de la pestaña Envíos.</p></div>
         <div class="field"><label class="l">Descripción</label><textarea data-path="description">${esc(ed.description)}</textarea></div>
         <label class="chk"><input type="checkbox" data-path="active" data-type="check" ${ed.active ? 'checked' : ''}> Mostrar en la tienda</label>
         <label class="chk" style="margin-top:8px"><input type="checkbox" data-path="pinned" data-type="check" ${ed.pinned ? 'checked' : ''}> Fijar arriba del catálogo (producto destacado)</label>
@@ -392,6 +396,7 @@ async function saveProduct() {
   const body = clone(ed);
   body.base_price = Number(body.base_price) || 0;
   body.lead_hours = Math.max(0, parseInt(body.lead_hours, 10) || 0);
+  ['weight_g', 'dim_h', 'dim_w', 'dim_l'].forEach((k) => { body[k] = Math.max(0, parseInt(body[k], 10) || 0); });
   body.groups.forEach((g) => {
     g.options = g.options.filter((o) => String(o.name).trim());
     g.options.forEach((o) => { o.price = Number(o.price) || 0; });
@@ -449,6 +454,29 @@ function estCost(km) {
   return Math.round(c);
 }
 
+async function paintCarriers() {
+  const box = document.getElementById('carrierBox');
+  if (!box) return;
+  let st = {};
+  try { st = await api('/api/admin/carriers/status'); } catch { }
+  const line = (name, c, envs) => c && c.configured
+    ? `<div style="margin-bottom:6px"><b>${name}</b> <span style="color:var(--ok);font-weight:700">● Conectado</span></div>`
+    : `<div style="margin-bottom:6px"><b>${name}</b> <span style="color:var(--bad);font-weight:700">● Sin conectar</span><br><span class="hint">Faltan en Render (Environment): <code>${esc((c ? c.missing : envs).join(', '))}</code></span></div>`;
+  box.innerHTML = `${line('Andreani', st.andreani, ['ANDREANI_USER', 'ANDREANI_PASS', 'ANDREANI_CONTRACT_DOM'])}${line('Correo Argentino', st.correo, ['MICORREO_USER', 'MICORREO_PASS', 'MICORREO_CUSTOMER_ID'])}
+    <p class="hint">Las claves se guardan solo en Render, nunca en esta página. Opcionales de Andreani: <code>ANDREANI_CONTRACT_SUC</code> (envío a sucursal) y <code>ANDREANI_CLIENT</code>.</p>
+    <div class="grid2" style="align-items:end"><div class="field" style="margin:0"><label class="l">Probar con un código postal</label><input type="text" inputmode="numeric" maxlength="4" id="carrierCp" value="1000"></div><button class="btn sec" type="button" id="carrierTest">Probar conexión</button></div>
+    <div id="carrierRes" class="hint" style="margin-top:8px"></div>`;
+  document.getElementById('carrierTest').onclick = async () => {
+    const out = document.getElementById('carrierRes');
+    out.textContent = 'Consultando a los correos…';
+    try {
+      const r = await api('/api/admin/carriers/test', { method: 'POST', body: { cp: document.getElementById('carrierCp').value } });
+      out.innerHTML = (r.options.length ? r.options.map((o) => `<div><b>${esc(o.carrier)}</b> · ${esc(o.service)}: <b>${money(o.price)}</b>${o.days ? ' · ' + esc(o.days) : ''}</div>`).join('') : '<div>No se pudo obtener ninguna tarifa.</div>')
+        + (r.errors.length ? `<div style="color:var(--bad);font-weight:600">No respondió: ${esc(r.errors.join(', '))}. Revisá usuario, contraseña y contrato en Render.</div>` : '');
+    } catch (e) { out.textContent = 'No se pudo consultar: ' + e.message; }
+  };
+}
+
 async function viewShipping() {
   const s = data.settings;
   $('#view').innerHTML = `
@@ -467,6 +495,19 @@ async function viewShipping() {
       <label class="chk" style="margin-bottom:10px"><input type="checkbox" data-s="allowPickup" ${s.allowPickup ? 'checked' : ''}> Ofrecer retiro en persona (sin costo)</label>
       <div class="field"><label class="l">Texto del retiro</label><input type="text" data-s="pickupText" value="${esc(s.pickupText)}"></div>
       <div class="field"><label class="l">Aviso debajo del costo de envío</label><input type="text" data-s="shippingNote" value="${esc(s.shippingNote)}"></div>
+      <h3 style="margin:20px 0 8px;font-size:1rem">Envíos por correo (Andreani y Correo Argentino)</h3>
+      <div id="carrierBox" class="card" style="margin:0 0 12px"><p class="hint" style="margin:0">Cargando…</p></div>
+      <label class="chk" style="margin-bottom:8px"><input type="checkbox" data-s="shipAndreaniOn" ${s.shipAndreaniOn ? 'checked' : ''}> Ofrecer envío con Andreani (el cliente lo paga junto con el pedido)</label>
+      <label class="chk" style="margin-bottom:12px"><input type="checkbox" data-s="shipCorreoOn" ${s.shipCorreoOn ? 'checked' : ''}> Ofrecer envío con Correo Argentino (el cliente lo paga junto con el pedido)</label>
+      <div class="grid2">
+        <div class="field"><label class="l">Peso de un paquete por defecto (gramos)</label><input type="number" min="1" data-s="pkgWeightG" value="${esc(s.pkgWeightG)}"></div>
+        <div class="field"><label class="l">Alto por defecto (cm)</label><input type="number" min="1" data-s="pkgH" value="${esc(s.pkgH)}"></div>
+        <div class="field"><label class="l">Ancho por defecto (cm)</label><input type="number" min="1" data-s="pkgW" value="${esc(s.pkgW)}"></div>
+        <div class="field"><label class="l">Largo por defecto (cm)</label><input type="number" min="1" data-s="pkgL" value="${esc(s.pkgL)}"></div>
+        <div class="field"><label class="l">Costo de embalaje por envío ($)</label><input type="number" min="0" step="any" data-s="carrierHandling" value="${esc(s.carrierHandling)}"><p class="hint">Se suma al precio del correo (caja, cinta, etc.).</p></div>
+        <div class="field"><label class="l">Plazo de Andreani (texto)</label><input type="text" data-s="andreaniDays" value="${esc(s.andreaniDays || '')}" placeholder="Ej: 3 a 7 días hábiles"><p class="hint">Andreani no informa el plazo al cotizar: lo escribís vos.</p></div>
+      </div>
+      <p class="hint">Se usan cuando un producto no tiene peso y medidas propios (se cargan al editar el producto). Si el cliente tiene un cupón o beneficio de envío gratis, el envío por correo le sale $0 y el costo lo pagás vos al correo.</p>
       <button class="btn" data-a="saveship">Guardar envíos</button>
     </div>
 
@@ -482,6 +523,7 @@ async function viewShipping() {
     </div>
     <div id="postalTable"><p class="hint">Cargando…</p></div>`;
   loadPostal();
+  paintCarriers();
 }
 
 async function loadPostal() {

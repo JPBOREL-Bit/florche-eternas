@@ -1,12 +1,24 @@
 # Florche.Eternas – Tienda online
 
 Tienda de flores de cinta de raso con panel de administración.
-El cliente arma su pedido, cotiza el envío con su código postal y el pedido te llega por WhatsApp.
+El cliente arma su pedido, elige cómo lo recibe (envío propio en Mendoza, Andreani o Correo Argentino) y lo manda. El pedido queda en tu panel y le podés escribir por WhatsApp, o pagarlo online con Mercado Pago.
 
-- Tienda: `https://TU-APP.onrender.com/`
-- Panel: `https://TU-APP.onrender.com/admin`
+- Tienda: `https://florcheterna.store/`
+- Panel: `https://florcheterna.store/admin`
 
 ---
+
+## Dominio propio (florcheterna.store)
+
+Con el dominio nuevo hay que actualizar estas cosas **una sola vez**:
+
+1. **Render, variable `PUBLIC_URL`** = `https://florcheterna.store` (sin barra al final) y reiniciar. Es la dirección que usan Mercado Pago (para volver a la tienda y para avisar los pagos) y las notificaciones. Mientras no esté, usan la dirección vieja `.onrender.com`. Con `PUBLIC_URL` puesta, **quien entre por la dirección vieja pasa solo a la nueva**.
+2. **Google (reseñas e ingreso con Google):** en Google Cloud, **Credenciales > tu ID de cliente de OAuth > Orígenes autorizados de JavaScript**, agregá `https://florcheterna.store` (y también `https://www.florcheterna.store` si lo usás). Sin esto el botón de Google deja de funcionar en el dominio nuevo.
+3. **Mercado Pago:** en la configuración de avisos (webhook) poné `https://florcheterna.store/api/mp/webhook`. La dirección exacta figura en el panel, **Mi tienda > Cobro con Mercado Pago**.
+4. **Notificaciones del celular:** las notificaciones son por dirección, así que hay que **volver a activarlas** entrando al panel desde `florcheterna.store/admin` (pestaña **Notificaciones**). También tenés que volver a iniciar sesión en el panel.
+5. **Links:** actualizá los de Instagram y WhatsApp, por ejemplo `https://florcheterna.store/?origen=instagram`.
+
+Los carritos y favoritos que los clientes tenían guardados en el celular están asociados a la dirección vieja, así que en el dominio nuevo empiezan de cero. Es normal.
 
 ## Cómo actualizar una tienda que ya está publicada
 
@@ -43,6 +55,9 @@ Creá un repositorio, clonalo **fuera de OneDrive**, descomprimí el zip adentro
 | `ADMIN_PASSWORD` | la contraseña para entrar al panel |
 | `JWT_SECRET` | cualquier frase larga |
 | `GOOGLE_CLIENT_ID` | para las reseñas y el ingreso con Google (ver sección **Reseñas**). Podés agregarla más tarde |
+| `ANDREANI_USER`, `ANDREANI_PASS`, `ANDREANI_CONTRACT_DOM` | envíos por Andreani (ver **Envíos por correo**) |
+| `MICORREO_USER`, `MICORREO_PASS`, `MICORREO_CUSTOMER_ID` | envíos por Correo Argentino (ver **Envíos por correo**) |
+| `PUBLIC_URL` | tu dominio, por ejemplo `https://florcheterna.store` (ver **Dominio propio**) |
 | `MP_ACCESS_TOKEN` | clave de Mercado Pago, solo si querés cobrar con "Terminar pedido" (ver sección **Mercado Pago**) |
 
 ---
@@ -151,9 +166,13 @@ Al tocar "Vaciar carrito" aparece una cajita en el medio de la pantalla con **S�
 En el carrito la clienta completa **nombre y WhatsApp** (obligatorios), cómo lo recibe (envío a domicilio con código postal y dirección, o punto de encuentro) y, si quiere, **para cuándo lo necesita**. Después elige:
 
 - **Mandar pedido:** el pedido se guarda en la pestaña **Pedidos** del panel y le aparece "Tu pedido ya fue mandado, nos comunicamos por WhatsApp para terminar con todo". **Ya no se abre WhatsApp solo**: sos vos quien le escribe desde el panel, con el botón **Escribirle** que trae el pedido.
-- **Terminar pedido** (solo aparece si activaste Mercado Pago, ver más abajo): guarda el pedido y la lleva a pagar los productos. El envío **no** va incluido en ese pago: se coordina aparte por WhatsApp.
+- **Terminar pedido** (solo aparece si activaste Mercado Pago, ver más abajo): guarda el pedido y la lleva a pagar los productos y, si eligió un correo, el envío. El envío **propio de Mendoza** no va incluido: se coordina aparte por WhatsApp.
 
 Al **rechazar** un pedido en el panel se borran los datos del cliente y del pedido (no se puede deshacer, por eso pide confirmación). El Resumen conserva solo el conteo.
+
+## Aspecto de la tienda
+
+La tienda tiene un diseño parecido a los marketplaces: buscador grande arriba, una barra con las ventajas (envíos, pagos, atención), fondo gris con tarjetas blancas, precio bien visible y descuentos en verde. El color de la marca (**Mi tienda > Color principal**) se usa en el encabezado y los botones; el texto del encabezado se ajusta solo para que se lea. En celular, el carrito tiene los totales siempre visibles abajo.
 
 ## Fotos
 
@@ -204,9 +223,34 @@ Las clientas **no necesitan cuenta para comprar**. La cuenta es solo una comodid
 
 En **Cuentas** ves cada cuenta con nombre, usuario o email, WhatsApp, **fecha de alta**, **modelo del dispositivo** con el que se creó (por ejemplo "SM-A546E (Android 13) · Chrome"), último ingreso y cantidad de pedidos. Podés **bloquear** (se le cierra la sesión al instante) o **eliminar** (los pedidos quedan en Pedidos). Hay un buscador. *Nota: Chrome en algunos celulares oculta el modelo exacto; en ese caso figura solo "Android".*
 
+## Envíos por correo (Andreani y Correo Argentino)
+
+La clienta elige entre las opciones que cotiza el servidor con su código postal: Andreani a domicilio o a sucursal, y Correo Argentino a domicilio o a sucursal. Cada opción muestra el precio, el plazo (cuando el correo lo informa) y se paga junto con el pedido. El precio **siempre lo calcula el servidor**: lo que mande el navegador se ignora.
+
+**Configuración (una vez, en Render, Environment):**
+
+| Variable | Qué es |
+|---|---|
+| `ANDREANI_USER`, `ANDREANI_PASS` | usuario y contraseña de tu cuenta de Andreani |
+| `ANDREANI_CONTRACT_DOM` | número de contrato para envío a domicilio |
+| `ANDREANI_CONTRACT_SUC` | (opcional) contrato para envío a sucursal |
+| `ANDREANI_CLIENT` | (opcional) código de cliente |
+| `MICORREO_USER`, `MICORREO_PASS` | usuario y contraseña de MiCorreo (Correo Argentino) |
+| `MICORREO_CUSTOMER_ID` | tu número de cliente en MiCorreo |
+
+Después, en el panel, **Mi tienda > Envíos por correo**, tildá cada correo que querés ofrecer. Ahí mismo ves si cada uno está **Conectado** o qué variable falta, y podés probar la conexión con un código postal.
+
+**Peso y medidas:** cada producto puede tener su peso (en gramos) y sus medidas de caja (en centímetros), que se cargan al editar el producto. Si no los cargás, se usan los valores por defecto de la pestaña Envíos. Con eso los correos cotizan el paquete real.
+
+**Embalaje:** podés sumar un costo fijo de embalaje a cada envío por correo. Si la clienta tiene un cupón de envío gratis, el correo le sale $0 y el costo lo pagás vos al correo.
+
+**Si un correo no responde**, el cliente igual ve el otro, y el sistema lo avisa. Las cotizaciones se guardan 10 minutos para no consultar a los correos en cada tecla.
+
+**Andreani no informa el plazo al cotizar:** lo escribís vos en "Plazo de Andreani" (por ejemplo "3 a 7 días hábiles"). Correo Argentino sí lo informa.
+
 ## Mercado Pago ("Terminar pedido")
 
-Cobra solo los **productos**; el envío se coordina por WhatsApp. Para activarlo:
+Cobra los **productos y el envío por correo** (Andreani o Correo Argentino) en un solo pago. El envío propio de Mendoza no entra en el pago: se coordina por WhatsApp. Para activarlo:
 
 1. En Mercado Pago, sección **Tu negocio > Credenciales** (o *Developers*), copiá el **Access Token**. El de prueba empieza con `TEST-` y el real con `APP_USR-`.
 2. En Render, **Environment**, agregá `MP_ACCESS_TOKEN` con ese valor y guardá. **No lo pegues en el chat ni en GitHub.**

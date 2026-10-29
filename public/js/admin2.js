@@ -120,7 +120,7 @@ FL.views.orders = async function () {
   $('#view').innerHTML = `
     <div class="head"><h2>Pedidos</h2>
       <div class="chips">${filters.map(([k, l, n]) => `<button class="chipb ${k === ordFilter ? 'on' : ''}" data-of="${k}">${l} (${n})</button>`).join('')}</div></div>
-    <p class="hint" style="margin:-4px 0 12px">Cuando un cliente toca “Enviar por WhatsApp”, el pedido aparece acá. Cuando se concrete, marcalo como <b>Venta realizada</b> y se suma a tus ganancias.</p>
+    <p class="hint" style="margin:-4px 0 12px">Cuando un cliente toca “Mandar pedido” o termina el pedido con Mercado Pago, aparece acá y te llega un aviso. Cuando se concrete, marcalo como <b>Venta realizada</b> y se suma a tus ganancias.</p>
     ${r.rows.map((o) => orderCard(o, o.id > seen && o.status === 'pendiente')).join('') || '<div class="card"><p class="hint" style="margin:0">No hay pedidos en esta lista.</p></div>'}`;
   if (maxId > seen) lset('fl_seen', Math.max(maxId, seen));
   pollOnce();
@@ -138,11 +138,12 @@ function orderCard(o, isNew) {
   return `<div class="ocard ${isNew ? 'new' : ''}">
     <div class="ohead"><b>${isNew ? '<span class="newtag">NUEVO</span> ' : ''}#${o.id} · ${esc(o.name)}</b><span class="badge ${BADGE[o.status]}">${STATUS_LABEL[o.status]}</span></div>
     <div class="ometa">${fdate(o.created_at)} · ${deliv}</div>
+    ${o.ship_carrier ? `<div class="oextra">Envío por correo: <b>${esc(o.ship_carrier)} · ${esc(o.ship_service)}</b> · ${Number(o.ship_cost) > 0 ? money(o.ship_cost) : 'gratis'}${o.ship_days ? ' · ' + esc(o.ship_days) : ''}</div>` : ''}
     ${o.paid ? `<div class="oextra" style="color:var(--ok);font-weight:700">✓ Pagado con Mercado Pago${o.pay_amount ? ' · ' + money(o.pay_amount) : ''}</div>` : (o.pay_status && o.pay_status !== 'approved' ? `<div class="oextra">Pago: ${esc(o.pay_status)}</div>` : '')}
     ${o.phone || o.needed_for ? `<div class="ometa">${o.phone ? `WhatsApp <b>+${esc(o.phone)}</b> <a class="btn sec sm" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}?text=${encodeURIComponent('Hola ' + String(o.name).split(' ')[0] + ', te escribimos por tu pedido #' + o.id + '.')}">Escribirle</a>` : ''}${o.needed_for ? ` ${o.phone ? '· ' : ''}Lo necesita para el <b>${esc(o.needed_for.split('-').reverse().join('/'))}</b>` : ''}</div>` : ''}
     <ul class="oitems">${items}</ul>
     ${extra.length ? `<div class="oextra">${extra.join(' · ')}</div>` : ''}
-    <div class="ototal">Total del pedido <b>${money(o.total)}</b></div>
+    <div class="ototal">Total del pedido <b>${money(o.total)}</b>${Number(o.ship_cost) > 0 ? ` + envío <b>${money(o.ship_cost)}</b> = <b>${money(Number(o.total) + Number(o.ship_cost))}</b>` : ''}</div>
     <div class="acts" style="justify-content:flex-start">
       ${o.status === 'pendiente' ? `<button class="btn okb sm" data-o="realizada" data-id="${o.id}">Venta realizada</button>` : ''}
       ${o.status !== 'rechazada' ? `<button class="btn danger sm" data-o="rechazada" data-id="${o.id}">Venta rechazada</button>` : ''}

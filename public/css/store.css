@@ -304,3 +304,7 @@ body.lock .wa-float { display: none; }
 .done .ok { width: 68px; height: 68px; border-radius: 50%; background: #E3F3EA; color: var(--ok); display: grid; place-items: center; margin: 0 auto 14px; font-size: 2.1rem; }
 .done h3 { font-family: var(--display); font-size: 1.6rem; margin: 0 0 10px; }
 .done p { margin: 0 auto 8px; max-width: 32ch; }
+
+/* ---------- opciones de envío por correo ---------- */
+.opt .opr { margin-left: auto; white-space: nowrap; padding-left: 10px; color: var(--p-dark); }
+#carrierOpts .opt { align-items: center; }

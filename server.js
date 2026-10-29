@@ -27,6 +27,8 @@ const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: isLocal ? false : { rejectUnauthorized: false },
   max: 8,
+  idleTimeoutMillis: 30000,         // las conexiones sin uso se cierran a los 30 s
+  connectionTimeoutMillis: 10000,    // si no hay conexión disponible en 10 s, falla en vez de colgarse
 });
 // Si se corta la conexión con la base (reinicio, pausa, red), no se cae el servidor: se reconecta sola.
 pool.on('error', (e) => console.error('Conexión con la base interrumpida (se reintenta sola):', e.message));
@@ -60,6 +62,15 @@ const DEFAULT_SETTINGS = {
   reviewsOn: true,
   reviewBannedWords: reviewsLib.DEFAULT_BANNED,
   showLikes: false,
+  // Envíos por correo
+  shipAndreaniOn: false,
+  shipCorreoOn: false,
+  pkgWeightG: 500,
+  pkgH: 15,
+  pkgW: 20,
+  pkgL: 30,
+  carrierHandling: 0,
+  andreaniDays: '',
   // Pagos
   payOn: false,
   payAlias: '',
@@ -82,8 +93,8 @@ const DEFAULT_SETTINGS = {
   shippingNote: 'El costo del envío es aproximado y se confirma por WhatsApp.',
 };
 
-const NUM_KEYS = ['pricePerKm', 'kmMultiplier', 'shippingBase', 'shippingMin', 'shippingRound', 'wholesaleMin'];
-const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes', 'wholesaleOn', 'waFloatOn', 'payOn'];
+const NUM_KEYS = ['pricePerKm', 'kmMultiplier', 'shippingBase', 'shippingMin', 'shippingRound', 'wholesaleMin', 'pkgWeightG', 'pkgH', 'pkgW', 'pkgL', 'carrierHandling'];
+const BOOL_KEYS = ['allowPickup', 'announceOn', 'progressOn', 'reviewsOn', 'showLikes', 'wholesaleOn', 'waFloatOn', 'payOn', 'shipAndreaniOn', 'shipCorreoOn'];
 const ID_KEYS = ['logoId', 'heroImageId'];
 
 async function getSettings() {
@@ -173,6 +184,10 @@ async function initDb() {
     alter table products add column if not exists discount_value numeric not null default 0;
     alter table products add column if not exists discount_ends timestamptz;
     alter table products add column if not exists lead_hours int not null default 0;
+    alter table products add column if not exists weight_g int not null default 0;
+    alter table products add column if not exists dim_h int not null default 0;
+    alter table products add column if not exists dim_w int not null default 0;
+    alter table products add column if not exists dim_l int not null default 0;
 
     create table if not exists images (
       id serial primary key,
@@ -231,6 +246,10 @@ async function initDb() {
     create index if not exists orders_status on orders(status);
     create index if not exists orders_created on orders(created_at);
     alter table orders add column if not exists needed_for date;
+    alter table orders add column if not exists ship_carrier text;
+    alter table orders add column if not exists ship_service text;
+    alter table orders add column if not exists ship_cost numeric;
+    alter table orders add column if not exists ship_days text;
     alter table orders add column if not exists phone text;
     alter table events add column if not exists src text;
     create table if not exists push_keys (id int primary key, pub text not null, priv text not null);
@@ -376,7 +395,47 @@ async function initDb() {
       created_at timestamptz not null default now()
     );
   `);
+  await hardenDb();
   await seedIfEmpty();
+}
+
+/* Seguridad de la base y rendimiento (recomendaciones de Supabase/Postgres).
+   - Se activa RLS en TODAS las tablas de la tienda y se le sacan los permisos a los roles públicos de Supabase
+     (anon y authenticated): así nadie puede leer cuentas, pedidos ni teléfonos usando la API pública de Supabase.
+     La tienda no se ve afectada: se conecta con el usuario principal, que no está sujeto a RLS.
+   - Se agregan índices a las claves foráneas que no tenían (acelera borrados en cascada y búsquedas). */
+const OWN_TABLES = ['settings', 'categories', 'products', 'images', 'postal_codes', 'events', 'events_daily', 'orders', 'coupons', 'likes', 'reviews',
+  'wholesalers', 'wholesale_purchases', 'calc_materials', 'calc_products', 'calc_config', 'push_keys', 'push_subs', 'accounts', 'password_resets'];
+async function hardenDb() {
+  // 1) Índices: cada uno solo si su tabla y columna existen (una base vieja puede no tenerlas).
+  const idx = [
+    ['password_resets', 'account_id', 'create index if not exists password_resets_account on password_resets(account_id)'],
+    ['wholesale_purchases', 'wid', 'create index if not exists wholesale_purchases_wid on wholesale_purchases(wid)'],
+    ['products', 'category_id', 'create index if not exists products_category on products(category_id)'],
+    ['orders', 'sid', 'create index if not exists orders_sid on orders(sid)'],
+  ];
+  for (const [table, col, sql] of idx) {
+    try {
+      const has = await q("select 1 from information_schema.columns where table_schema='public' and table_name=$1 and column_name=$2", [table, col]);
+      if (has.rowCount) await q(sql);
+    } catch (e) { console.error('índice omitido (' + table + '.' + col + '):', e.message); }
+  }
+  // 2) RLS y permisos: se hace tabla por tabla, así un problema con una no frena las demás.
+  try {
+    const su = await q("select (rolsuper or rolbypassrls) as ok from pg_roles where rolname = current_user");
+    if (!su.rows[0] || !su.rows[0].ok) return;
+  } catch (e) { return; }
+  for (const t of OWN_TABLES) {
+    try {
+      const exists = await q("select to_regclass($1) is not null as ok", ['public.' + t]);
+      if (!exists.rows[0].ok) continue;
+      await q(`alter table public.${t} enable row level security`);
+      await q(`do $$ begin
+        if exists (select 1 from pg_roles where rolname = 'anon') then execute 'revoke all on public.${t} from anon'; end if;
+        if exists (select 1 from pg_roles where rolname = 'authenticated') then execute 'revoke all on public.${t} from authenticated'; end if;
+      end $$`);
+    } catch (e) { console.error('no se pudo proteger la tabla ' + t + ':', e.message); }
+  }
 }
 
 async function seedIfEmpty() {
@@ -539,13 +598,17 @@ function cleanProduct(b) {
     active: b.active === undefined ? true : !!b.active,
     pinned: !!b.pinned,
     lead_hours: Math.max(0, Math.min(2160, parseInt(b.lead_hours, 10) || 0)),
+    weight_g: Math.max(0, Math.min(60000, parseInt(b.weight_g, 10) || 0)),
+    dim_h: Math.max(0, Math.min(300, parseInt(b.dim_h, 10) || 0)),
+    dim_w: Math.max(0, Math.min(300, parseInt(b.dim_w, 10) || 0)),
+    dim_l: Math.max(0, Math.min(300, parseInt(b.dim_l, 10) || 0)),
     discount_type: dType,
     discount_value: dValue,
     discount_ends: dEnds,
   };
 }
 
-const PRODUCT_COLS = 'id, category_id, name, description, base_price, images, groups, pinned, discount_type, discount_value, discount_ends, lead_hours';
+const PRODUCT_COLS = 'id, category_id, name, description, base_price, images, groups, pinned, discount_type, discount_value, discount_ends, lead_hours, weight_g, dim_h, dim_w, dim_l';
 const fmtProduct = (p) => ({ ...p, base_price: Number(p.base_price), discount_value: Number(p.discount_value) });
 
 /* ------------------------------------------------------------------ */
@@ -707,6 +770,14 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(compression());
 app.use(express.json({ limit: '8mb' }));
+// Con dominio propio (PUBLIC_URL), la dirección vieja de onrender.com manda a la nueva (solo páginas, no la API ni los avisos de pago)
+const PUBLIC_HOST = (() => { try { return process.env.PUBLIC_URL ? new URL(process.env.PUBLIC_URL).host.toLowerCase() : ''; } catch { return ''; } })();
+app.use((req, res, next) => {
+  if (!PUBLIC_HOST || (req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api/')) return next();
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').toLowerCase();
+  if (host !== PUBLIC_HOST && host.endsWith('.onrender.com')) return res.redirect(301, process.env.PUBLIC_URL.replace(/\/$/, '') + req.originalUrl);
+  next();
+});
 
 // Sirve para los monitores externos y también mantiene activa la base de datos (Supabase gratis se pausa si no se usa)
 let selfPings = 0;
@@ -724,7 +795,7 @@ app.get('/api/health', async (req, res) => {
 // Modo "no dormir" (opcional): con KEEP_AWAKE=on la tienda se consulta a sí misma cada 10 minutos,
 // así Render no la apaga por inactividad mientras esté despierta.
 function startKeepAwake() {
-  const url = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL;
+  const url = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL;
   if (String(process.env.KEEP_AWAKE || '').toLowerCase() !== 'on' || !url) return;
   const every = Math.max(500, Number(process.env.KEEP_AWAKE_MS) || 10 * 60e3);
   console.log(`Modo "no dormir" activado: la tienda se consulta a sí misma cada ${Math.round((every / 60e3) * 10) / 10} min.`);
@@ -775,6 +846,8 @@ app.get('/api/store', wrap(async (req, res) => {
     return f;
   });
   settings.payReady = !!settings.payOn && !!(process.env.MP_ACCESS_TOKEN || '').trim();
+  const cst = carriersApi.status();
+  settings.carriersReady = { andreani: !!settings.shipAndreaniOn && cst.andreani.configured, correo: !!settings.shipCorreoOn && cst.correo.configured };
   res.json({ settings, categories: cats.rows, products, reviews });
 }));
 
@@ -842,9 +915,9 @@ app.post('/api/admin/products', auth, wrap(async (req, res) => {
   let p;
   try { p = cleanProduct(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
   const { rows } = await q(
-    `insert into products(category_id, name, description, base_price, images, groups, active, pinned, discount_type, discount_value, discount_ends, lead_hours, position)
-     values($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11,$12, coalesce((select max(position) from products), 0) + 1) returning id`,
-    [p.category_id, p.name, p.description, p.base_price, JSON.stringify(p.images), JSON.stringify(p.groups), p.active, p.pinned, p.discount_type, p.discount_value, p.discount_ends, p.lead_hours]
+    `insert into products(category_id, name, description, base_price, images, groups, active, pinned, discount_type, discount_value, discount_ends, lead_hours, weight_g, dim_h, dim_w, dim_l, position)
+     values($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, coalesce((select max(position) from products), 0) + 1) returning id`,
+    [p.category_id, p.name, p.description, p.base_price, JSON.stringify(p.images), JSON.stringify(p.groups), p.active, p.pinned, p.discount_type, p.discount_value, p.discount_ends, p.lead_hours, p.weight_g, p.dim_h, p.dim_w, p.dim_l]
   );
   res.json({ id: rows[0].id });
 }));
@@ -853,8 +926,8 @@ app.put('/api/admin/products/:id', auth, wrap(async (req, res) => {
   try { p = cleanProduct(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
   await q(
     `update products set category_id=$2, name=$3, description=$4, base_price=$5, images=$6::jsonb, groups=$7::jsonb, active=$8,
-       pinned=$9, discount_type=$10, discount_value=$11, discount_ends=$12, lead_hours=$13 where id=$1`,
-    [req.params.id, p.category_id, p.name, p.description, p.base_price, JSON.stringify(p.images), JSON.stringify(p.groups), p.active, p.pinned, p.discount_type, p.discount_value, p.discount_ends, p.lead_hours]
+       pinned=$9, discount_type=$10, discount_value=$11, discount_ends=$12, lead_hours=$13, weight_g=$14, dim_h=$15, dim_w=$16, dim_l=$17 where id=$1`,
+    [req.params.id, p.category_id, p.name, p.description, p.base_price, JSON.stringify(p.images), JSON.stringify(p.groups), p.active, p.pinned, p.discount_type, p.discount_value, p.discount_ends, p.lead_hours, p.weight_g, p.dim_h, p.dim_w, p.dim_l]
   );
   res.json({ ok: true });
 }));
@@ -955,7 +1028,10 @@ const ctx = { app, q, auth, wrap, rateOk, getSettings, jwtSecret: JWT_SECRET, po
 const pushApi = require('./lib/push.js').mount(ctx);
 ctx.notify = pushApi.notify;
 ctx.getAccount = require('./lib/accounts.js').mount(ctx).getAccount;
-ctx.publicUrl = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || '';
+ctx.publicUrl = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '';
+const carriersApi = require('./lib/carriers.js');
+ctx.carriers = carriersApi;
+carriersApi.mount(ctx);
 require('./lib/payments.js').mount(ctx);
 const revApi = reviewsLib.mount(ctx);
 require('./lib/coupons.js').mount(ctx);

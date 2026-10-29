@@ -139,6 +139,10 @@ function applyTheme() {
   r.setProperty('--p-light', mixHex(c, 255, 0.45));
   r.setProperty('--p-faint', mixHex(c, 255, 0.6));
   r.setProperty('--p-edge', mixHex(c, 255, 0.5));
+  // el encabezado usa el color de la marca: el texto se pone claro u oscuro según qué tan claro sea ese color
+  const n = parseInt(c.slice(1), 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  r.setProperty('--on-p', lum > 0.62 ? '#2b2b2b' : '#ffffff');
   const m = document.querySelector('meta[name=theme-color]');
   if (m) m.content = c;
   document.title = s.storeName + (s.tagline ? ' · ' + s.tagline : '');
@@ -173,6 +177,11 @@ let form = Object.assign({ name: '', phone: '', delivery: 'envio', cp: '', addre
 let query = '';                            // texto del buscador
 let sortBy = 'default';                     // orden del catálogo
 let sending = false;
+let carriers = null;                       // { cp, loading, options, errors, message }
+let shipOpt = 'own';                       // 'own' (envío propio) o el id de una opción de correo
+let carTimer = null, cpTimer = null;
+const carReady = () => { const c = S().carriersReady || {}; return !!(c.andreani || c.correo); };
+const carrierOption = () => (shipOpt !== 'own' && carriers && carriers.options ? carriers.options.find((o) => o.id === shipOpt) || null : null);
 let ship = null;                           // { ok, cp, km, cost } | { ok:false, ... } | { loading:true }
 let couponRes = null, couponBusy = false, couponOpen = false, couponMsg = '', couponReq = 0, couponTimer = null;
 let prevUnlocked = new Set();
@@ -197,7 +206,7 @@ async function init() {
     return;
   }
   applyTheme();
-  renderAnn(); renderTop(); renderHero(); renderCats(); renderGrid(); renderAbout(); renderWholesale(); renderFoot(); renderWaFloat(); renderTools();
+  renderAnn(); renderTop(); renderHero(); renderCats(); renderGrid(); renderAbout(); renderWholesale(); renderFoot(); renderWaFloat(); renderTools(); renderPerks();
   pruneCart();
   renderCartBadge();
   wireGlobal();
@@ -234,7 +243,26 @@ function renderTop() {
       ${s.logoId ? `<img src="${imgUrl(s.logoId)}" alt="">` : ''}
       <span>${esc(s.storeName)}</span>
     </a>
-    <button class="cart-btn" id="openCart" aria-label="Abrir carrito">${BAG_SVG}<span class="lbl">Carrito</span><span class="n" id="cartN" data-n="0"></span></button>`;
+    <form class="hsearch" id="hsearch" role="search">
+      <input id="q" type="search" placeholder="Buscar productos, estilos, colores…" autocomplete="off" aria-label="Buscar" value="${esc(query)}">
+      <button type="button" id="qClear" aria-label="Borrar búsqueda" ${query ? '' : 'hidden'}>×</button>
+      <button type="submit" class="go" aria-label="Buscar">${SEARCH_SVG}</button>
+    </form>
+    <div class="hact"><button class="cart-btn" id="openCart" aria-label="Abrir carrito">${BAG_SVG}<span class="lbl">Carrito</span><span class="n" id="cartN" data-n="0"></span></button></div>`;
+}
+
+/* Barra de beneficios (solo lo que de verdad ofrece la tienda) */
+function renderPerks() {
+  const el = $('#perks');
+  if (!el) return;
+  const s = S(), c = s.carriersReady || {};
+  const items = [];
+  items.push(c.andreani || c.correo ? ['Envíos a todo el país', [c.andreani && 'Andreani', c.correo && 'Correo Argentino'].filter(Boolean).join(' y ')] : ['Envíos en Mendoza', 'Lo coordinamos por WhatsApp']);
+  if (s.payReady) items.push(['Pagá con Mercado Pago', 'Pago online']);
+  if (s.whatsapp) items.push(['Atención por WhatsApp', 'Te respondemos personalmente']);
+  items.push(['Hecho a mano', 'Flores de cinta de raso, Mendoza']);
+  el.innerHTML = items.map(([t, sub]) => `<div class="perk"><i aria-hidden="true"></i><div><b>${esc(t)}</b><span>${esc(sub)}</span></div></div>`).join('');
+  el.hidden = false;
 }
 
 function renderHero() {
@@ -273,15 +301,20 @@ function renderCats() {
   el.innerHTML = items.map((c) => `<button class="cat" role="tab" data-cat="${c.id}" aria-selected="${String(c.id) === String(activeCat)}">${esc(c.name)}</button>`).join('');
 }
 
+let shownCount = 0;
+function paintCount() {
+  const rc = $('#resCount');
+  if (rc) rc.textContent = `${shownCount} ${shownCount === 1 ? 'producto' : 'productos'}`;
+}
+
 function renderTools() {
   const el = $('#tools');
   if (!el) return;
   if (!store.products.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="tl">
-    <div class="srch">${SEARCH_SVG}<input id="q" type="search" placeholder="Buscar flores…" autocomplete="off" aria-label="Buscar" value="${esc(query)}"><button type="button" id="qClear" aria-label="Borrar búsqueda" ${query ? '' : 'hidden'}>×</button></div>
-    <select id="sortBy" aria-label="Ordenar"><option value="default">Ordenar: destacados</option><option value="asc">Menor precio</option><option value="desc">Mayor precio</option><option value="off">Con descuento primero</option></select>
-  </div>`;
+  el.innerHTML = `<div class="tl"><span class="rc" id="resCount"></span>
+    <label class="sortl">Ordenar por <select id="sortBy" aria-label="Ordenar"><option value="default">Destacados</option><option value="asc">Menor precio</option><option value="desc">Mayor precio</option><option value="off">Con descuento primero</option></select></label></div>`;
   $('#sortBy').value = sortBy;
+  paintCount();
 }
 
 function renderWaFloat() {
@@ -311,15 +344,19 @@ function renderGrid() {
         const d = P.discounted(P.minPrice(p), p);
         return `<button class="card" data-pid="${p.id}">
           <div class="ph">${p.images && p.images[0] ? `<img loading="lazy" decoding="async" src="${thumbUrl(p.images[0])}" alt="${esc(p.name)}">` : FLOWER_SVG}
-            ${d.active ? `<span class="tag-off">-${d.pct}%</span>` : ''}
             ${p.pinned ? '<span class="tag-pin">Destacado</span>' : ''}
             <span class="heart ${likes.has(p.id) ? 'on' : ''}" role="button" tabindex="0" aria-label="Marcar ${esc(p.name)} como favorito" aria-pressed="${likes.has(p.id)}" data-like="${p.id}">${HEART_SVG}</span></div>
-          <h3>${esc(p.name)}</h3>
-          <div class="price">${hasOpts ? 'Desde ' : ''}${d.active ? `<s>${money(d.original)}</s>` : ''}<b>${money(d.price)}</b></div>
-          ${p.lead_hours > 0 ? `<div class="lead">${CLOCK_SVG}Pedir con ${leadText(p.lead_hours)} de anticipación</div>` : ''}
+          <div class="cbody">
+            <h3>${esc(p.name)}</h3>
+            <div class="price">${d.active ? `<s>${money(d.original)}</s>` : ''}<div class="now">${hasOpts ? '<small>Desde</small> ' : ''}<b>${money(d.price)}</b>${d.active ? `<span class="off">${d.pct}% OFF</span>` : ''}</div></div>
+            ${carReady() ? '<div class="ship-tag">Envíos a todo el país</div>' : ''}
+            ${p.lead_hours > 0 ? `<div class="lead">${CLOCK_SVG}Pedir con ${leadText(p.lead_hours)} de anticipación</div>` : ''}
+          </div>
         </button>`;
       }).join('')
     : empty;
+  shownCount = list.length;
+  paintCount();
 }
 
 function renderWholesale() {
@@ -644,6 +681,7 @@ function renderCartBadge() {
 
 function cartChanged() {
   orderToken = uid();   // un carrito distinto es un pedido distinto
+  if (carReady() && form.delivery === 'envio' && /^\d{4}$/.test(form.cp.trim())) { carriers = null; scheduleCarriers(); }
   persist();
   renderCartBadge();
   if (!$('#drawer').hidden) refreshCart();
@@ -775,6 +813,7 @@ document.addEventListener('fl:account', (e) => {
 });
 
 function renderForm() {
+  setTimeout(() => { if (form.delivery === 'envio' && /^\d{4}$/.test(form.cp.trim()) && carReady() && !carriers) calcCarriers(); }, 0);
   const el = $('#cForm');
   if (!el) return;
   const s = S();
@@ -793,10 +832,12 @@ function renderForm() {
       <div class="cprow"><input id="fCp" type="text" inputmode="numeric" maxlength="4" placeholder="Ej: 5539" value="${esc(form.cp)}"><button class="btn ghost" type="button" data-cact="ship">Calcular envío</button></div>
       <div id="shipMsg">${shipMsgHtml()}</div>
     </div>
+    <div id="carrierOpts"></div>
     <div class="field"><label class="l" for="fAddr">Dirección (calle, número, barrio)</label><input id="fAddr" type="text" autocomplete="street-address" value="${esc(form.address)}"></div>` : ''}
     <div class="field"><label class="l" for="fDate">¿Para cuándo lo necesitás? <span class="opt-tag">(opcional)</span></label><input id="fDate" type="date" value="${esc(form.needed)}" min="${minNeeded()}"><div class="hint" id="dateHint"></div></div>
   </div>`;
   renderDateHint();
+  renderCarriers();
 }
 
 function shipMsgHtml() {
@@ -804,6 +845,7 @@ function shipMsgHtml() {
   if (!ship) return '';
   if (ship.loading) return '<div class="ship-msg" style="color:var(--muted)">Calculando…</div>';
   if (ship.ok) return `<div class="ship-msg ok">${ship.label ? esc(ship.label) + ' · ' : ''}A unos ${ship.km} km. Envío estimado <b>${money(ship.cost)}</b>.<br><small style="color:var(--muted)">${esc(s.shippingNote || '')}</small></div>`;
+  if (ship.reason === 'outside' && carReady()) return '<div class="ship-msg ok">Ese código postal está fuera de Mendoza: lo enviamos por correo. Elegí abajo cómo.</div>';
   return `<div class="ship-msg ${ship.reason === 'outside' || ship.reason === 'invalid' ? 'bad' : 'warn'}">${esc(ship.message || 'No pudimos calcular el envío.')}</div>`;
 }
 
@@ -840,16 +882,18 @@ function renderCartFoot() {
   const hasDisc = T.t.discount > 0 || T.cDisc > 0;
   const extra = [...T.t.benefits.filter((b) => !/env[ií]o/i.test(b))];
   const shipTxt = T.freeShip ? 'Gratis' : ship && ship.ok ? money(ship.cost) : 'a confirmar';
+  const cOpt = envio ? carrierOption() : null;
+  const cCost = cOpt ? (T.freeShip ? 0 : cOpt.price) : null;
   el.innerHTML = `
     ${hasDisc ? `<div class="sum"><span>Productos</span><span>${money(T.subtotal)}</span></div>` : ''}
     ${T.t.discount > 0 ? `<div class="sum disc"><span>Promo: ${esc(P.tierLabel(T.t.applied))}</span><span>-${money(T.t.discount)}</span></div>` : ''}
     ${T.cOk && T.cDisc > 0 ? `<div class="sum disc"><span>Cupón ${esc(couponRes.code)}</span><span>-${money(T.cDisc)}</span></div>` : ''}
     ${extra.map((b) => `<div class="sum disc"><span>${esc(b)}</span><span></span></div>`).join('')}
-    <div class="sum total"><span>Total</span><b>${money(T.total)}</b></div>
-    ${envio ? `<div class="sum"><span>Envío estimado · no incluido</span><span>${shipTxt}</span></div>` : ''}
+    <div class="sum total"><span>${cOpt ? 'Productos' : 'Total'}</span><b>${money(T.total)}</b></div>
+    ${cOpt ? `<div class="sum"><span>Envío ${esc(cOpt.carrier)} · ${esc(cOpt.service)}</span><span>${cCost === 0 ? 'Gratis' : money(cCost)}</span></div><div class="sum total"><span>Total con envío</span><b>${money(T.total + cCost)}</b></div>` : (envio ? `<div class="sum"><span>Envío estimado · no incluido</span><span>${shipTxt}</span></div>` : '')}
     <button class="btn" data-cact="send" style="margin-top:6px" ${sending ? 'disabled' : ''}>${sending ? 'Mandando…' : 'Mandar pedido'}</button>
     ${S().payReady ? `<button class="btn wa" data-cact="pay" style="margin-top:8px" ${sending ? 'disabled' : ''}>Terminar pedido (pagar con Mercado Pago)</button>` : ''}
-    <p class="small">${S().payReady ? '"Mandar pedido" lo guarda y te escribimos por WhatsApp para terminar todo. "Terminar pedido" te lleva a pagar los productos con Mercado Pago: el envío no está incluido y se coordina aparte por WhatsApp.' : 'Después de mandarlo, te escribimos por WhatsApp para confirmar todo.'}</p>`;
+    <p class="small">${S().payReady ? (cOpt ? '"Mandar pedido" lo guarda y te escribimos por WhatsApp para coordinar el pago. "Terminar pedido" te lleva a pagar los productos y el envío con Mercado Pago.' : '"Mandar pedido" lo guarda y te escribimos por WhatsApp para terminar todo. "Terminar pedido" te lleva a pagar los productos con Mercado Pago: el envío no está incluido y se coordina aparte por WhatsApp.') : 'Después de mandarlo, te escribimos por WhatsApp para confirmar todo.'}</p>`;
 }
 
 /* ---------- cupón ---------- */
@@ -900,13 +944,59 @@ async function applyCoupon() {
   renderCoupon(); renderCartFoot();
 }
 
+/* ---------- envío por correo (Andreani / Correo Argentino) ---------- */
+function autoPickCarrier() {
+  // Fuera de Mendoza no hay envío propio: se deja elegida la opción de correo más barata
+  if (ship && ship.reason === 'outside' && carriers && carriers.options && carriers.options.length && !carrierOption()) shipOpt = carriers.options[0].id;
+}
+async function calcCarriers() {
+  if (!carReady() || form.delivery !== 'envio') return;
+  const cp = form.cp.trim();
+  if (!/^\d{4}$/.test(cp) || !cart.length) { carriers = null; renderCarriers(); return; }
+  carriers = { cp, loading: true, options: [], errors: [] }; renderCarriers();
+  let j;
+  try {
+    const r = await fetch('/api/shipping/carriers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cp, items: couponItems() }) });
+    j = await r.json();
+  } catch { j = { ok: false, message: 'No pudimos consultar los correos ahora.' }; }
+  if (form.cp.trim() !== cp) return;
+  carriers = { cp, loading: false, options: j.ok ? j.options : [], errors: j.ok ? j.errors : [], message: j.ok ? '' : j.message };
+  if (shipOpt !== 'own' && !carrierOption()) shipOpt = 'own';
+  autoPickCarrier();
+  renderCarriers(); renderCartFoot();
+}
+const scheduleCarriers = () => { clearTimeout(carTimer); carTimer = setTimeout(calcCarriers, 400); };
+function renderCarriers() {
+  const el = $('#carrierOpts');
+  if (!el) return;
+  if (!carReady() || form.delivery !== 'envio' || !carriers) { el.innerHTML = ''; return; }
+  if (carriers.loading) { el.innerHTML = '<div class="ship-msg" style="color:var(--muted)">Buscando precios de envío por correo…</div>'; return; }
+  const T = totals();
+  const rows = [];
+  if (ship && ship.ok) {
+    const c = T.freeShip ? 'Gratis' : money(ship.cost);
+    rows.push(`<label class="opt ${shipOpt === 'own' ? 'on' : ''}"><input type="radio" name="shipopt" value="own" ${shipOpt === 'own' ? 'checked' : ''}><span><b>Envío propio (Mendoza)</b><br><small>Lo coordinamos por WhatsApp</small></span><b class="opr">${c}</b></label>`);
+  }
+  for (const o of carriers.options) {
+    const svc = String(o.service || '').split(' · ')[0];   // 'A sucursal' / 'A domicilio' (el nombre del correo ya está en la marca)
+    rows.push(`<label class="opt ${shipOpt === o.id ? 'on' : ''}"><input type="radio" name="shipopt" value="${esc(o.id)}" ${shipOpt === o.id ? 'checked' : ''}><span><b>${esc(o.carrier)} · ${esc(svc)}</b><br><small>${o.days ? esc(o.days) + ' · ' : ''}Se paga junto con el pedido${o.note ? ' · ' + esc(o.note) : ''}</small></span><b class="opr">${T.freeShip ? 'Gratis' : money(o.price)}</b></label>`);
+  }
+  let msg = '';
+  if (!carriers.options.length) msg = carriers.message || (carriers.errors.length ? 'No pudimos consultar los correos ahora. Probá de nuevo en un rato.' : 'No hay envíos por correo disponibles para ese código postal.');
+  else if (carriers.errors.length) msg = `No pudimos consultar ${carriers.errors.join(' ni ')} ahora.`;
+  el.innerHTML = `<div class="field"><label class="l">¿Cómo lo enviamos?</label>${rows.join('')}${msg ? `<div class="ship-msg warn">${esc(msg)}</div>` : ''}</div>`;
+}
+
 /* ---------- envío estimado ---------- */
 async function calcShip() {
   const cp = form.cp.trim();
   const box = $('#shipMsg');
+  // Si el formulario no está en pantalla (por ejemplo, justo después de mandar el pedido), no hay nada que dibujar.
+  if (!box) return;
   if (!/^\d{4}$/.test(cp)) { ship = { ok: false, reason: 'invalid', cp, message: 'Ingresá un código postal de 4 números.' }; box.innerHTML = shipMsgHtml(); return; }
   ship = { loading: true, cp };
   box.innerHTML = shipMsgHtml();
+  calcCarriers();
   try {
     const r = await fetch('/api/shipping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cp }) });
     const j = await r.json();
@@ -917,6 +1007,8 @@ async function calcShip() {
   }
   const b2 = $('#shipMsg');
   if (b2) b2.innerHTML = shipMsgHtml();
+  autoPickCarrier();
+  renderCarriers();
   renderCartFoot();
 }
 
@@ -931,7 +1023,10 @@ function onCartInput(e) {
   else if (t.id === 'fCp') {
     t.value = t.value.replace(/\D/g, '').slice(0, 4);
     form.cp = t.value;
-    if (ship && ship.cp !== form.cp) { ship = null; const b = $('#shipMsg'); if (b) b.innerHTML = ''; renderCartFoot(); }
+    if (ship && ship.cp !== form.cp) { ship = null; carriers = null; shipOpt = 'own'; const b = $('#shipMsg'); if (b) b.innerHTML = ''; renderCarriers(); renderCartFoot(); }
+    if (/^\d{4}$/.test(form.cp)) { clearTimeout(cpTimer); cpTimer = setTimeout(calcShip, 500); }
+  } else if (t.name === 'shipopt' && e.type === 'change') {
+    shipOpt = t.value; renderCarriers(); renderCartFoot();
   } else if (t.name === 'deliv' && e.type === 'change') {
     form.delivery = t.value;
     persistForm();
@@ -962,12 +1057,13 @@ function onCartClick(e) {
 }
 
 /* ---------- pedido por WhatsApp ---------- */
-function showDone() {
+function showDone(sh) {
   $('#drawer').innerHTML = `<button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
     <div class="drawer-head"><h2>¡Pedido enviado!</h2></div>
     <div class="drawer-body"><div class="done"><div class="ok" aria-hidden="true">✓</div>
       <h3>Tu pedido ya fue mandado</h3>
       <p>Nos comunicamos por <b>WhatsApp</b> al <b>${esc(form.phone)}</b> para terminar con todo.</p>
+      ${sh ? `<p>El envío con <b>${esc(sh.carrier)}</b> (${sh.cost === 0 ? 'gratis' : money(sh.cost)}) se paga junto con el pedido: te escribimos para coordinar el pago.</p>` : ''}
       <p class="small">Ahí confirmamos tu pedido, el envío y cómo seguimos.</p></div></div>
     <div class="drawer-foot"><button class="btn" data-cact="close">Seguir mirando</button></div>`;
 }
@@ -981,7 +1077,8 @@ async function sendOrder(thenPay) {
   if (form.phone.replace(/\D/g, '').length < 8) { toast('Escribí tu número de WhatsApp'); return focus('#fPhone'); }
   if (form.delivery === 'envio') {
     if (!/^\d{4}$/.test(form.cp.trim())) { toast('Ingresá tu código postal'); return focus('#fCp'); }
-    if (ship && ship.reason === 'outside') { toast('Solo enviamos dentro de Mendoza'); return; }
+    if (ship && ship.reason === 'outside' && !(carReady() && carrierOption())) { toast(carReady() ? 'Elegí cómo querés que lo enviemos' : 'Solo enviamos dentro de Mendoza'); return; }
+    if (shipOpt !== 'own' && !carrierOption()) { toast('Esperá un segundo: estamos calculando el envío'); return; }
     if (!form.address.trim()) { toast('Escribí tu dirección'); return focus('#fAddr'); }
   }
   if (form.needed && form.needed < minNeeded()) { toast('Elegí otra fecha: tus productos necesitan más anticipación'); return focus('#fDate'); }
@@ -991,7 +1088,8 @@ async function sendOrder(thenPay) {
   const payload = {
     name: form.name.trim(), phone: form.phone, items: couponItems(), coupon: T.cOk ? couponRes.code : '', token: orderToken,
     delivery: form.delivery, cp: form.cp, address: form.address, neededFor: form.needed || '',
-    shipEstimate: form.delivery === 'envio' && ship && ship.ok && !T.freeShip ? ship.cost : null, vid, sid,
+    shipEstimate: form.delivery === 'envio' && ship && ship.ok && !T.freeShip && !carrierOption() ? ship.cost : null,
+    shipOpt: form.delivery === 'envio' && carrierOption() ? shipOpt : '', vid, sid,
   };
   sending = true; renderCartFoot();
   let res;
@@ -1004,8 +1102,10 @@ async function sendOrder(thenPay) {
   persistForm();
   lastOrder = { id: res.id, token: orderToken };
   if (thenPay) return payOrder(lastOrder);
+  const shDone = carrierOption() && res.shipCost !== null && res.shipCost !== undefined ? { carrier: carrierOption().carrier, cost: res.shipCost } : null;
   cart = []; orderToken = uid(); persist(); renderCartBadge();
-  showDone();
+  carriers = null; shipOpt = 'own';
+  showDone(shDone);
 }
 
 async function payOrder(o) {
@@ -1060,20 +1160,22 @@ function wireGlobal() {
     else if (m && prodById(+m[1])) openProduct(+m[1], { fromUrl: true });
   });
   let qT;
-  const tools = $('#tools');
-  if (tools) {
-    tools.addEventListener('input', (e) => {
-      if (e.target.id !== 'q') return;
-      query = e.target.value;
-      const c = $('#qClear'); if (c) c.hidden = !query;
-      clearTimeout(qT); qT = setTimeout(renderGrid, 120);
-    });
-    tools.addEventListener('click', (e) => {
-      if (!e.target.closest('#qClear')) return;
-      query = ''; renderTools(); renderGrid(); const q = $('#q'); if (q) q.focus();
-    });
-    tools.addEventListener('change', (e) => { if (e.target.id === 'sortBy') { sortBy = e.target.value; renderGrid(); } });
-  }
+  document.addEventListener('input', (e) => {
+    if (e.target.id !== 'q') return;
+    query = e.target.value;
+    const c = $('#qClear'); if (c) c.hidden = !query;
+    clearTimeout(qT); qT = setTimeout(renderGrid, 120);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#qClear')) return;
+    query = ''; const q = $('#q'); if (q) { q.value = ''; q.focus(); }
+    e.target.closest('#qClear').hidden = true; renderGrid();
+  });
+  document.addEventListener('change', (e) => { if (e.target.id === 'sortBy') { sortBy = e.target.value; renderGrid(); } });
+  document.addEventListener('submit', (e) => {
+    if (e.target.id !== 'hsearch') return;
+    e.preventDefault(); const g = $('#catalogo'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   $('#sheet').addEventListener('click', onSheetClick);
   $('#sheetOverlay').addEventListener('click', closeProduct);
   $('#cartOverlay').addEventListener('click', closeCart);
