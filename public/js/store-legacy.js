@@ -206,7 +206,7 @@ async function init() {
     return;
   }
   applyTheme();
-  renderAnn(); renderTop(); renderHero(); renderCats(); renderGrid(); renderAbout(); renderWholesale(); renderFoot(); renderWaFloat(); renderTools(); renderPerks();
+  renderAnn(); renderTop(); renderHero(); renderCats(); renderGrid(); renderAbout(); renderWholesale(); renderFoot(); renderWaFloat(); renderTools();
   pruneCart();
   renderCartBadge();
   wireGlobal();
@@ -243,26 +243,7 @@ function renderTop() {
       ${s.logoId ? `<img src="${imgUrl(s.logoId)}" alt="">` : ''}
       <span>${esc(s.storeName)}</span>
     </a>
-    <form class="hsearch" id="hsearch" role="search">
-      <input id="q" type="search" placeholder="Buscar productos, estilos, colores…" autocomplete="off" aria-label="Buscar" value="${esc(query)}">
-      <button type="button" id="qClear" aria-label="Borrar búsqueda" ${query ? '' : 'hidden'}>×</button>
-      <button type="submit" class="go" aria-label="Buscar">${SEARCH_SVG}</button>
-    </form>
     <div class="hact"><button class="cart-btn" id="openCart" aria-label="Abrir carrito">${BAG_SVG}<span class="lbl">Carrito</span><span class="n" id="cartN" data-n="0"></span></button></div>`;
-}
-
-/* Barra de beneficios (solo lo que de verdad ofrece la tienda) */
-function renderPerks() {
-  const el = $('#perks');
-  if (!el) return;
-  const s = S(), c = s.carriersReady || {};
-  const items = [];
-  items.push(c.andreani || c.correo ? ['Envíos a todo el país', [c.andreani && 'Andreani', c.correo && 'Correo Argentino'].filter(Boolean).join(' y ')] : ['Envíos en Mendoza', 'Lo coordinamos por WhatsApp']);
-  if (s.payReady) items.push(['Pagá con Mercado Pago', 'Pago online']);
-  if (s.whatsapp) items.push(['Atención por WhatsApp', 'Te respondemos personalmente']);
-  items.push(['Hecho a mano', 'Flores de cinta de raso, Mendoza']);
-  el.innerHTML = items.map(([t, sub]) => `<div class="perk"><i aria-hidden="true"></i><div><b>${esc(t)}</b><span>${esc(sub)}</span></div></div>`).join('');
-  el.hidden = false;
 }
 
 function renderHero() {
@@ -311,11 +292,13 @@ function renderTools() {
   const el = $('#tools');
   if (!el) return;
   if (!store.products.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="tl"><span class="rc" id="resCount"></span>
-    <label class="sortl">Ordenar por <select id="sortBy" aria-label="Ordenar"><option value="default">Destacados</option><option value="asc">Menor precio</option><option value="desc">Mayor precio</option><option value="off">Con descuento primero</option></select></label></div>`;
+  el.innerHTML = `<div class="tl">
+    <div class="srch">${SEARCH_SVG}<input id="q" type="search" placeholder="Buscar flores…" autocomplete="off" aria-label="Buscar" value="${esc(query)}"><button type="button" id="qClear" aria-label="Borrar búsqueda" ${query ? '' : 'hidden'}>×</button></div>
+    <select id="sortBy" aria-label="Ordenar"><option value="default">Ordenar: destacados</option><option value="asc">Menor precio</option><option value="desc">Mayor precio</option><option value="off">Con descuento primero</option></select>
+  </div>`;
   $('#sortBy').value = sortBy;
-  paintCount();
 }
+
 
 function renderWaFloat() {
   const a = $('#waFloat');
