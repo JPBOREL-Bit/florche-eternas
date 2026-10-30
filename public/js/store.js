@@ -173,16 +173,12 @@ let store = { settings: {}, categories: [], products: [] };
 let activeCat = 'all';
 let cart = load('fl_cart2', []);           // [{ id, pid, sel, qty, note, key }]
 let orderToken = load('fl_tok', null) || uid();
-let form = Object.assign({ name: '', phone: '', delivery: 'envio', cp: '', address: '', coupon: '', needed: '' }, load('fl_form2', {}));
+let form = Object.assign({ name: '', last: '', phone: '', delivery: 'envio', province: '', cp: '', address: '', coupon: '', shipOpt: '' }, load('fl_form2', {}));
 let query = '';                            // texto del buscador
 let sortBy = 'default';                     // orden del catálogo
 let sending = false;
-let carriers = null;                       // { cp, loading, options, errors, message }
-let shipOpt = 'own';                       // 'own' (envío propio) o el id de una opción de correo
-let carTimer = null, cpTimer = null;
 const carReady = () => { const c = S().carriersReady || {}; return !!(c.andreani || c.correo); };
-const carrierOption = () => (shipOpt !== 'own' && carriers && carriers.options ? carriers.options.find((o) => o.id === shipOpt) || null : null);
-let ship = null;                           // { ok, cp, km, cost } | { ok:false, ... } | { loading:true }
+let ck = { step: 'cart', ship: null, quote: null, done: null, sending: false };   // estado del carrito y del envío
 let couponRes = null, couponBusy = false, couponOpen = false, couponMsg = '', couponReq = 0, couponTimer = null;
 let prevUnlocked = new Set();
 let cur = null;                            // producto abierto
@@ -344,14 +340,12 @@ function renderGrid() {
         const d = P.discounted(P.minPrice(p), p);
         return `<button class="card" data-pid="${p.id}">
           <div class="ph">${p.images && p.images[0] ? `<img loading="lazy" decoding="async" src="${thumbUrl(p.images[0])}" alt="${esc(p.name)}">` : FLOWER_SVG}
+            ${d.active ? `<span class="tag-off">-${d.pct}%</span>` : ''}
             ${p.pinned ? '<span class="tag-pin">Destacado</span>' : ''}
             <span class="heart ${likes.has(p.id) ? 'on' : ''}" role="button" tabindex="0" aria-label="Marcar ${esc(p.name)} como favorito" aria-pressed="${likes.has(p.id)}" data-like="${p.id}">${HEART_SVG}</span></div>
-          <div class="cbody">
-            <h3>${esc(p.name)}</h3>
-            <div class="price">${d.active ? `<s>${money(d.original)}</s>` : ''}<div class="now">${hasOpts ? '<small>Desde</small> ' : ''}<b>${money(d.price)}</b>${d.active ? `<span class="off">${d.pct}% OFF</span>` : ''}</div></div>
-            ${carReady() ? '<div class="ship-tag">Envíos a todo el país</div>' : ''}
-            ${p.lead_hours > 0 ? `<div class="lead">${CLOCK_SVG}Pedir con ${leadText(p.lead_hours)} de anticipación</div>` : ''}
-          </div>
+          <h3>${esc(p.name)}</h3>
+          <div class="price">${hasOpts ? 'Desde ' : ''}${d.active ? `<s>${money(d.original)}</s> ` : ''}<b>${money(d.price)}</b></div>
+          ${p.lead_hours > 0 ? `<div class="lead">${CLOCK_SVG}Pedir con ${leadText(p.lead_hours)} de anticipación</div>` : ''}
         </button>`;
       }).join('')
     : empty;
@@ -360,16 +354,9 @@ function renderGrid() {
 }
 
 function renderWholesale() {
-  const s = S();
+  // El bloque de mayoristas no se muestra en la tienda: los mayoristas entran desde la página /mayoristas.
   const el = $('#wholesale');
-  if (!el) return;
-  if (!s.wholesaleOn) { el.hidden = true; el.innerHTML = ''; return; }
-  el.hidden = false;
-  el.innerHTML = `<div class="wrap"><div class="ws-card">
-    <div><h2 class="sec-title">Trabajá como mayorista</h2>
-      <p>¿Tenés un emprendimiento o un negocio? Comprá flores de cinta de raso en cantidad, con precios para compras mayores. Compra mínima: <b>${Number(s.wholesaleMin) || 20} flores por mes</b>.</p></div>
-    <a class="btn" href="/mayoristas">Quiero ser mayorista</a>
-  </div></div>`;
+  if (el) { el.hidden = true; el.innerHTML = ''; }
 }
 
 function renderAbout() {
@@ -638,12 +625,12 @@ function addToCart() {
   track('add_to_cart', p.id, qty);
   cartChanged();
   closeProduct();
-  const T = totals();
-  const hint = S().progressOn && T.t.next ? ` Te faltan ${money(T.t.next.at - T.subtotal)} para ${P.tierLabel(T.t.next).toLowerCase()}.` : '';
-  toast('Agregado al carrito.' + (p.lead_hours > 0 ? ` Recordá: se pide con ${leadText(p.lead_hours)} de anticipación.` : '') + hint);
+  toast('Agregado al carrito.' + (p.lead_hours > 0 ? ` Recordá: se pide con ${leadText(p.lead_hours)} de anticipación.` : ''));
 }
 
-/* ---------- carrito: cálculo ---------- */
+/* ---------- carrito ---------- */
+const PROVINCES = ['Buenos Aires', 'Catamarca', 'Chaco', 'Chubut', 'Ciudad Autónoma de Buenos Aires', 'Córdoba', 'Corrientes', 'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones', 'Neuquén', 'Río Negro', 'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán'];
+
 function view() {
   return cart.map((c) => {
     const p = prodById(c.pid);
@@ -651,7 +638,7 @@ function view() {
     const r = P.calcSelection(p, c.sel);
     if (r.missing.length) return null;
     const d = P.discounted(r.price, p);
-    return { c, p, lines: r.lines, unit: d.price, original: r.price, disc: d.active, qty: c.qty, line: d.price * c.qty };
+    return { c, p, unit: d.price, original: r.price, disc: d.active, qty: c.qty, line: d.price * c.qty };
   }).filter(Boolean);
 }
 
@@ -666,8 +653,13 @@ function totals() {
   const t = P.tierEffects(subtotal, S().progressOn ? S().progressTiers : []);
   const cOk = !!(couponRes && couponRes.ok);
   const cDisc = cOk ? couponRes.discount : 0;
-  const total = Math.max(0, subtotal - t.discount - cDisc);
-  return { v, subtotal, t, cOk, cDisc, total, freeShip: t.freeShipping || (cOk && couponRes.freeShipping) };
+  const discount = (t.discount || 0) + cDisc;
+  const total = Math.max(0, subtotal - discount);
+  return {
+    v, subtotal, t, cOk, cDisc, discount, total,
+    freeShip: !!(t.freeShipping || (cOk && couponRes.freeShipping)),
+    leadHours: v.reduce((m, x) => Math.max(m, Number(x.p.lead_hours) || 0), 0),
+  };
 }
 
 const cartCount = () => cart.reduce((a, c) => a + c.qty, 0);
@@ -680,15 +672,15 @@ function renderCartBadge() {
 }
 
 function cartChanged() {
-  orderToken = uid();   // un carrito distinto es un pedido distinto
-  if (carReady() && form.delivery === 'envio' && /^\d{4}$/.test(form.cp.trim())) { carriers = null; scheduleCarriers(); }
+  orderToken = uid();     // un carrito distinto es un pedido distinto
+  ck.ship = null; ck.quote = null;   // el envío depende de lo que hay en el carrito
+  if (form.coupon) scheduleCoupon();
   persist();
   renderCartBadge();
-  if (!$('#drawer').hidden) refreshCart();
-  if (form.coupon) scheduleCoupon();
+  if (!$('#drawer').hidden) renderCart();
+  if (cart.length && form.delivery === 'envio') refreshShipping();
 }
 
-/* ---------- carrito: pantalla ---------- */
 function openCart() {
   $('#cartOverlay').hidden = false;
   $('#drawer').hidden = false;
@@ -701,32 +693,245 @@ function closeCart() {
   $('#drawer').hidden = true;
   $('#cartOverlay').hidden = true;
   unlockScroll();
+  ck.done = null; ck.step = 'cart';
+}
+
+let ckTimer = null;
+
+function itemHtml(x) {
+  return `<li class="ck-item">
+    <div class="ck-info"><b>${esc(x.p.name)}</b><span>${x.disc ? `<s>${money(x.original * x.qty)}</s> ` : ''}${money(x.line)}</span></div>
+    <div class="ck-qty">
+      <button type="button" data-cact="dec" data-id="${x.c.id}" aria-label="Quitar uno">−</button>
+      <b>${x.qty}</b>
+      <button type="button" data-cact="inc" data-id="${x.c.id}" aria-label="Agregar uno">+</button>
+      <button type="button" class="ck-rm" data-cact="rm" data-id="${x.c.id}" aria-label="Quitar del pedido">Quitar</button>
+    </div></li>`;
 }
 
 function renderCart() {
   const d = $('#drawer');
+  if (ck.done) return paintDone(d);
   if (!cart.length) {
     d.innerHTML = `<button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
-      <div class="drawer-head"><h2>Tu carrito</h2></div>
+      <div class="drawer-head"><h2>Tu pedido</h2></div>
       <div class="drawer-body"><div class="cart-empty">${FLOWER_SVG}<p>Todavía no agregaste nada.</p><button class="btn ghost" data-cact="close">Ver catálogo</button></div></div>`;
     return;
   }
-  d.innerHTML = `
-    <button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
+  if (ck.step === 'datos') return paintCheckout(d);
+  const T = totals();
+  d.innerHTML = `<button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
     <div class="drawer-head"><h2>Tu pedido</h2></div>
     <div class="drawer-body">
       <div id="cProg"></div>
-      <div id="cItems"></div>
-      <div id="cForm"></div>
+      <ul class="ck-items">${T.v.map(itemHtml).join('')}</ul>
       <div id="cCpn"></div>
+      <button class="ck-clear" type="button" data-cact="clear">Vaciar carrito</button>
     </div>
-    <div class="drawer-foot" id="cFoot"></div>`;
-  renderProg(); renderItems(); renderForm(); renderCoupon(); renderCartFoot();
+    <div class="drawer-foot">
+      <div class="sum"><span>Subtotal</span><b>${money(T.subtotal)}</b></div>
+      ${T.discount > 0 ? `<div class="sum"><span>Descuentos</span><span>- ${money(T.discount)}</span></div><div class="sum total"><span>Total</span><b>${money(T.total)}</b></div>` : ''}
+      <button class="btn" type="button" data-cact="hacer">Hacer pedido</button>
+    </div>`;
+  renderProg(); renderCoupon();
 }
 
-function refreshCart() {
-  if (!cart.length || !$('#cItems')) return renderCart();
-  renderProg(); renderItems(); renderCoupon(); renderCartFoot(); renderDateHint();
+function shippingFields() {
+  return `<div class="field"><label class="l" for="ckProv">Provincia *</label>
+      <select id="ckProv"><option value="">Elegí tu provincia</option>${PROVINCES.map((p) => `<option value="${esc(p)}" ${form.province === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></div>
+    ${form.province ? `<div class="field"><label class="l" for="ckCp">Código postal *</label>
+      <input id="ckCp" inputmode="numeric" maxlength="4" placeholder="Ej: 5500" value="${esc(form.cp)}"></div>
+    <div class="field"><label class="l" for="ckAddr">Calle y número *</label>
+      <input id="ckAddr" autocomplete="street-address" value="${esc(form.address)}"></div>` : ''}
+    <div id="ckShip"></div>`;
+}
+
+function paintCheckout(d) {
+  const isEnvio = form.delivery === 'envio';
+  d.innerHTML = `<button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
+    <div class="drawer-head"><button class="ck-back" type="button" data-cact="volver">← Volver</button><h2>Tus datos</h2></div>
+    <div class="drawer-body">
+      ${window.FLAccount && !window.FLAccount.me ? '<p class="hint">¿Ya tenés cuenta? <button type="button" class="ck-back" data-acct="login">Ingresá</button> y completamos tus datos.</p>' : ''}
+      <div class="field"><label class="l" for="ckName">Nombre *</label><input id="ckName" autocomplete="given-name" value="${esc(form.name)}"></div>
+      <div class="field"><label class="l" for="ckLast">Apellido *</label><input id="ckLast" autocomplete="family-name" value="${esc(form.last)}"></div>
+      <div class="field"><label class="l" for="ckPhone">Número de WhatsApp *</label><input id="ckPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="261 456 7890" value="${esc(form.phone)}"></div>
+      <div class="field"><label class="l">¿Cómo lo querés recibir?</label>
+        <label class="opt ${isEnvio ? '' : 'on'}"><input type="radio" name="ckDeliv" value="retiro" ${isEnvio ? '' : 'checked'}><span><b>Punto de encuentro</b><br><small>Solo disponible en Ciudad de Mendoza.</small></span></label>
+        <label class="opt ${isEnvio ? 'on' : ''}"><input type="radio" name="ckDeliv" value="envio" ${isEnvio ? 'checked' : ''}><span><b>Envío a domicilio</b></span></label>
+      </div>
+      ${isEnvio ? shippingFields() : ''}
+      <div id="cCpn"></div>
+    </div>
+    <div class="drawer-foot">
+      <div id="ckSum"></div>
+      <button class="btn" type="button" data-cact="mandar" ${ck.sending ? 'disabled' : ''}>${ck.sending ? 'Mandando…' : 'Mandar pedido'}</button>
+    </div>`;
+  paintShipping();
+  renderCoupon();
+}
+
+/* costo del envío tal como queda elegido */
+function shipInfo() {
+  if (form.delivery !== 'envio') return { ok: true, cost: 0, label: 'Sin costo (punto de encuentro)' };
+  if (!form.province) return { ok: false, label: 'a elegir' };
+  if (form.province === 'Mendoza') {
+    if (!ck.ship || ck.ship.loading || !ck.ship.ok) return { ok: false, label: 'a calcular' };
+    if (totals().freeShip) return { ok: true, cost: 0, label: 'Gratis' };
+    return { ok: true, cost: ck.ship.cost, label: ck.ship.cost === 0 ? 'Gratis' : money(ck.ship.cost) };
+  }
+  if (!form.shipOpt) return { ok: false, label: 'a elegir' };
+  if (form.shipOpt === 'wa') return { ok: true, cost: null, label: 'A confirmar por WhatsApp' };
+  const o = ((ck.quote && ck.quote.options) || []).find((x) => x.id === form.shipOpt);
+  if (!o) return { ok: false, label: 'a elegir' };
+  if (o.price == null) return { ok: true, cost: null, label: 'A confirmar por WhatsApp' };
+  if (totals().freeShip) return { ok: true, cost: 0, label: 'Gratis' };
+  return { ok: true, cost: o.price, label: money(o.price) };
+}
+
+function shipHtml() {
+  if (form.delivery !== 'envio') return '';
+  if (!form.province) return '<p class="hint">Elegí tu provincia para calcular el envío.</p>';
+  if (!/^\d{4}$/.test(form.cp)) return '<p class="hint">Escribí tu código postal para calcular el envío.</p>';
+  if (form.province === 'Mendoza') {
+    if (!ck.ship || ck.ship.loading) return '<p class="hint">Calculando el envío…</p>';
+    if (!ck.ship.ok) return `<div class="ship-msg bad">${esc(ck.ship.reason === 'outside' ? 'Ese código postal no es de Mendoza. Si vivís en otra provincia, elegila arriba.' : (ck.ship.message || 'No pudimos calcular el envío. Revisá el código postal.'))}</div>`;
+    return '';
+  }
+  if (!ck.quote || ck.quote.loading) return '<p class="hint">Buscando opciones de envío…</p>';
+  const opts = ck.quote.options || [];
+  const errs = ck.quote.errors && ck.quote.errors.length ? `<div class="ship-msg warn">No pudimos consultar ${esc(ck.quote.errors.join(' ni '))} ahora.</div>` : '';
+  if (!opts.length) return `<div class="ship-msg warn">Por ahora coordinamos el envío a ${esc(form.province)} por WhatsApp. Te confirmamos el costo.</div>${errs}`;
+  const rows = opts.map((o) => `<label class="opt ${form.shipOpt === o.id ? 'on' : ''}">
+      <input type="radio" name="ckOpt" value="${esc(o.id)}" ${form.shipOpt === o.id ? 'checked' : ''}>
+      <span><b>${esc(o.carrier)} · ${esc(o.service)}</b><br><small>${o.price == null ? esc(o.note || 'Te confirmamos el costo por WhatsApp.') : esc(o.days || '')}</small></span>
+      <b class="opr">${o.price == null ? 'A confirmar' : money(o.price)}</b></label>`).join('');
+  return `<div class="field"><label class="l">¿Con qué correo lo enviamos?</label>${rows}</div>${errs}`;
+}
+
+function summaryHtml() {
+  const T = totals();
+  const sh = shipInfo();
+  const total = sh.ok && sh.cost != null ? T.total + sh.cost : T.total;
+  const pendingShip = sh.ok && sh.cost == null;
+  return `<div class="sum"><span>Productos${T.discount > 0 ? ' (con descuentos)' : ''}</span><b>${money(T.total)}</b></div>
+    <div class="sum"><span>Envío</span><span>${sh.label}</span></div>
+    <div class="sum total"><span>Total a pagar</span><b>${money(total)}</b></div>
+    ${!sh.ok && form.delivery === 'envio' ? '<p class="small">Falta elegir el envío para ver el total final.</p>' : ''}
+    ${pendingShip ? '<p class="small">El total final se confirma por WhatsApp junto con el costo del envío.</p>' : ''}
+    ${T.leadHours > 0 ? `<div class="ck-lead">${CLOCK_SVG}<span>Tiempo mínimo de espera: <b>${leadText(T.leadHours)}</b></span></div>` : ''}`;
+}
+
+function paintShipping() {
+  const box = $('#ckShip');
+  if (box) box.innerHTML = shipHtml();
+  const sum = $('#ckSum');
+  if (sum) sum.innerHTML = summaryHtml();
+}
+
+function itemsForServer() {
+  return view().map((x) => ({ pid: x.c.pid, sel: x.c.sel, qty: x.c.qty, note: x.c.note || '' }));
+}
+
+function refreshShipping() {
+  paintShipping();
+  clearTimeout(ckTimer);
+  ckTimer = setTimeout(fetchShipping, 250);
+}
+
+async function fetchShipping() {
+  if (form.delivery !== 'envio' || !form.province || !/^\d{4}$/.test(form.cp)) { ck.ship = null; ck.quote = null; return paintShipping(); }
+  const cp = form.cp, prov = form.province;
+  if (prov === 'Mendoza') {
+    ck.ship = { loading: true, cp }; ck.quote = null; paintShipping();
+    let j;
+    try {
+      const r = await fetch('/api/shipping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cp }) });
+      j = await r.json();
+    } catch { j = { ok: false, message: 'No pudimos calcular el envío ahora. Probá de nuevo.' }; }
+    if (form.cp !== cp || form.province !== prov) return;
+    ck.ship = Object.assign({ cp }, j);
+  } else {
+    ck.ship = null; ck.quote = { loading: true, cp }; paintShipping();
+    let j;
+    try {
+      const r = await fetch('/api/shipping/carriers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cp, items: itemsForServer() }) });
+      j = await r.json();
+    } catch { j = { ok: false }; }
+    if (form.cp !== cp || form.province !== prov) return;
+    const options = j.ok ? (j.options || []) : [];
+    ck.quote = { cp, options, errors: j.ok ? (j.errors || []) : ['los correos'] };
+    if (!options.length) form.shipOpt = 'wa';
+    else if (!options.some((o) => o.id === form.shipOpt)) form.shipOpt = '';
+    persistForm();
+  }
+  paintShipping();
+}
+
+// Si la clienta ingresa a su cuenta, se completan sus datos en el carrito (sin pisar lo que ya escribió)
+document.addEventListener('fl:account', (e) => {
+  const a = e.detail;
+  if (!a || a.mustChange) return;
+  const ph = /^549\d{10}$/.test(a.phone || '') ? `${a.phone.slice(3, 6)} ${a.phone.slice(6, 9)} ${a.phone.slice(9)}` : (a.phone || '');
+  const parts = String(a.name || '').trim().split(/\s+/);
+  let ch = false;
+  if (!form.name && parts[0]) { form.name = parts[0]; ch = true; }
+  if (!form.last && parts.length > 1) { form.last = parts.slice(1).join(' '); ch = true; }
+  if (!form.phone && ph) { form.phone = ph; ch = true; }
+  if (!form.address && a.address) { form.address = a.address; ch = true; }
+  if (ch) { persistForm(); if (!$('#drawer').hidden && cart.length) renderCart(); }
+});
+
+function paintDone(d) {
+  d.innerHTML = `<button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
+    <div class="drawer-head"><h2>¡Gracias!</h2></div>
+    <div class="drawer-body"><div class="done">
+      <div class="ok" aria-hidden="true">✓</div>
+      <h3>Gracias por realizar el pedido</h3>
+      <p>Te hablamos por WhatsApp dentro de las próximas 24 horas para confirmar tu pedido y coordinar el pago y el envío.</p>
+      <p class="small">Pedido #${esc(ck.done.id)}</p>
+    </div></div>
+    <div class="drawer-foot"><button class="btn" type="button" data-cact="close">Listo</button></div>`;
+}
+
+async function sendCart() {
+  if (ck.sending || !cart.length) return;
+  const first = form.name.trim(), last = form.last.trim(), phone = form.phone.trim();
+  const isEnvio = form.delivery === 'envio';
+  const focus = (id) => { const i = $('#' + id); if (i) i.focus(); };
+  if (!first) { toast('Escribí tu nombre'); return focus('ckName'); }
+  if (!last) { toast('Escribí tu apellido'); return focus('ckLast'); }
+  if (phone.replace(/\D/g, '').length < 8) { toast('Escribí tu número de WhatsApp'); return focus('ckPhone'); }
+  let shipOpt = '', shipEstimate = null;
+  if (isEnvio) {
+    if (!form.province) { toast('Elegí tu provincia'); return focus('ckProv'); }
+    if (!/^\d{4}$/.test(form.cp)) { toast('Escribí tu código postal'); return focus('ckCp'); }
+    if (!form.address.trim()) { toast('Escribí la calle y el número'); return focus('ckAddr'); }
+    if (form.province === 'Mendoza') {
+      if (!ck.ship || ck.ship.loading || !ck.ship.ok) { toast(ck.ship && ck.ship.reason === 'outside' ? 'Ese código postal no es de Mendoza' : ((ck.ship && ck.ship.message) || 'Revisá tu código postal de Mendoza')); return; }
+      shipEstimate = totals().freeShip ? null : ck.ship.cost;
+    } else {
+      if (!form.shipOpt) { toast('Elegí con qué correo lo enviamos'); return; }
+      if (form.shipOpt !== 'wa') shipOpt = form.shipOpt;
+    }
+  }
+  const payload = {
+    name: `${first} ${last}`, phone, items: itemsForServer(), token: orderToken,
+    delivery: isEnvio ? 'envio' : 'retiro',
+    cp: isEnvio ? form.cp : '', address: isEnvio ? `${form.address.trim()}, ${form.province}` : '',
+    shipOpt, shipEstimate, neededFor: '', coupon: totals().cOk ? couponRes.code : '', vid, sid,
+  };
+  ck.sending = true; renderCart();
+  let res;
+  try {
+    const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    res = await r.json();
+  } catch { res = { ok: false, message: 'No pudimos conectarnos. Probá de nuevo.' }; }
+  ck.sending = false;
+  if (!res.ok) { toast(res.message || 'No se pudo mandar el pedido'); renderCart(); return; }
+  persistForm();
+  cart = []; orderToken = uid(); persist(); renderCartBadge();
+  ck.done = { id: res.id }; ck.step = 'cart'; ck.ship = null; ck.quote = null;
+  renderCart();
 }
 
 function progressPct(subtotal, tiers) {
@@ -767,88 +972,6 @@ function renderProg() {
   renderProg.ready = true;
 }
 
-function renderItems() {
-  const el = $('#cItems');
-  if (!el) return;
-  el.innerHTML = view().map((x) => `
-    <div class="item">
-      <div class="im">${x.p.images && x.p.images[0] ? `<img src="${thumbUrl(x.p.images[0])}" alt="">` : FLOWER_SVG}</div>
-      <div>
-        <h3>${esc(x.p.name)}</h3>
-        ${x.lines.length ? `<ul>${x.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
-        ${x.c.note ? `<div class="inote">“${esc(x.c.note)}”</div>` : ''}
-        <div class="row">
-          <div class="stepper"><button data-cact="dec" data-id="${x.c.id}" aria-label="Menos">−</button><output>${x.qty}</output><button data-cact="inc" data-id="${x.c.id}" aria-label="Más">+</button></div>
-          <div><b>${money(x.line)}</b>${x.disc ? `<s>${money(x.original * x.qty)}</s>` : ''}</div>
-        </div>
-        <button class="rm" data-cact="rm" data-id="${x.c.id}">Quitar</button>
-      </div>
-    </div>`).join('');
-}
-
-const cartLeadHours = () => Math.max(0, ...view().map((x) => Number(x.p.lead_hours) || 0));
-const minNeeded = () => isoDate(earliestFrom(cartLeadHours()));
-function renderDateHint() {
-  const el = $('#dateHint');
-  if (!el) return;
-  const h = cartLeadHours();
-  const min = minNeeded();
-  const inp = $('#fDate');
-  if (inp) inp.min = min;
-  let html = h > 0 ? `Tu pedido necesita al menos <b>${leadText(h)}</b> de anticipación: la fecha más próxima es <b>${whenLabel(earliestFrom(h))}</b>.` : '';
-  if (form.needed && form.needed < min) html += `<div class="ferr">Esa fecha es muy pronto. Elegí una desde ${whenLabel(earliestFrom(h))}.</div>`;
-  el.innerHTML = html;
-}
-
-// Cuando la clienta ingresa a su cuenta, se completan solos sus datos (sin pisar lo que ya escribió)
-document.addEventListener('fl:account', (e) => {
-  const a = e.detail;
-  if (!a || a.mustChange) return;
-  const ph = /^549\d{10}$/.test(a.phone || '') ? `${a.phone.slice(3, 6)} ${a.phone.slice(6, 9)} ${a.phone.slice(9)}` : (a.phone || '');
-  let ch = false;
-  if (!form.name && a.name) { form.name = a.name; ch = true; }
-  if (!form.phone && ph) { form.phone = ph; ch = true; }
-  if (!form.address && a.address) { form.address = a.address; ch = true; }
-  if (ch) { persistForm(); if ($('#drawer') && !$('#drawer').hidden && cart.length) renderCart(); }
-});
-
-function renderForm() {
-  setTimeout(() => { if (form.delivery === 'envio' && /^\d{4}$/.test(form.cp.trim()) && carReady() && !carriers) calcCarriers(); }, 0);
-  const el = $('#cForm');
-  if (!el) return;
-  const s = S();
-  const envio = form.delivery === 'envio';
-  el.innerHTML = `<div class="form">
-    <h3>Tus datos</h3>
-    ${window.FLAccount && !window.FLAccount.me ? '<p class="hint acct-nudge">¿Ya tenés cuenta? <button type="button" data-acct="login">Ingresá</button> y completamos tus datos.</p>' : ''}
-    <div class="field"><label class="l" for="fName">Nombre</label><input id="fName" type="text" autocomplete="name" value="${esc(form.name)}"></div>
-    <div class="field"><label class="l" for="fPhone">Tu WhatsApp</label><input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ej: 261 456 7890" value="${esc(form.phone)}"><p class="hint">Te escribimos por ahí para terminar el pedido.</p></div>
-    <div class="field"><label class="l">¿Cómo lo recibís?</label>
-      <label class="opt ${envio ? 'on' : ''}"><input type="radio" name="deliv" value="envio" ${envio ? 'checked' : ''}><span><b>Envío a domicilio</b><br><small>Mendoza. Calculamos un costo estimado con tu código postal.</small></span></label>
-      ${s.allowPickup ? `<label class="opt ${!envio ? 'on' : ''}"><input type="radio" name="deliv" value="retiro" ${!envio ? 'checked' : ''}><span><b>${esc(s.pickupText || 'Retiro en persona')}</b></span></label>` : ''}
-    </div>
-    ${envio ? `
-    <div class="field"><label class="l" for="fCp">Código postal</label>
-      <div class="cprow"><input id="fCp" type="text" inputmode="numeric" maxlength="4" placeholder="Ej: 5539" value="${esc(form.cp)}"><button class="btn ghost" type="button" data-cact="ship">Calcular envío</button></div>
-      <div id="shipMsg">${shipMsgHtml()}</div>
-    </div>
-    <div id="carrierOpts"></div>
-    <div class="field"><label class="l" for="fAddr">Dirección (calle, número, barrio)</label><input id="fAddr" type="text" autocomplete="street-address" value="${esc(form.address)}"></div>` : ''}
-    <div class="field"><label class="l" for="fDate">¿Para cuándo lo necesitás? <span class="opt-tag">(opcional)</span></label><input id="fDate" type="date" value="${esc(form.needed)}" min="${minNeeded()}"><div class="hint" id="dateHint"></div></div>
-  </div>`;
-  renderDateHint();
-  renderCarriers();
-}
-
-function shipMsgHtml() {
-  const s = S();
-  if (!ship) return '';
-  if (ship.loading) return '<div class="ship-msg" style="color:var(--muted)">Calculando…</div>';
-  if (ship.ok) return `<div class="ship-msg ok">${ship.label ? esc(ship.label) + ' · ' : ''}A unos ${ship.km} km. Envío estimado <b>${money(ship.cost)}</b>.<br><small style="color:var(--muted)">${esc(s.shippingNote || '')}</small></div>`;
-  if (ship.reason === 'outside' && carReady()) return '<div class="ship-msg ok">Ese código postal está fuera de Mendoza: lo enviamos por correo. Elegí abajo cómo.</div>';
-  return `<div class="ship-msg ${ship.reason === 'outside' || ship.reason === 'invalid' ? 'bad' : 'warn'}">${esc(ship.message || 'No pudimos calcular el envío.')}</div>`;
-}
-
 function renderCoupon() {
   const el = $('#cCpn');
   if (!el) return;
@@ -874,36 +997,15 @@ function renderCoupon() {
     <p class="small"><button class="rm" data-cact="clear" style="color:var(--muted)">Vaciar carrito</button></p>`;
 }
 
-function renderCartFoot() {
-  const el = $('#cFoot');
-  if (!el) return;
-  const T = totals();
-  const envio = form.delivery === 'envio';
-  const hasDisc = T.t.discount > 0 || T.cDisc > 0;
-  const extra = [...T.t.benefits.filter((b) => !/env[ií]o/i.test(b))];
-  const shipTxt = T.freeShip ? 'Gratis' : ship && ship.ok ? money(ship.cost) : 'a confirmar';
-  const cOpt = envio ? carrierOption() : null;
-  const cCost = cOpt ? (T.freeShip ? 0 : cOpt.price) : null;
-  el.innerHTML = `
-    ${hasDisc ? `<div class="sum"><span>Productos</span><span>${money(T.subtotal)}</span></div>` : ''}
-    ${T.t.discount > 0 ? `<div class="sum disc"><span>Promo: ${esc(P.tierLabel(T.t.applied))}</span><span>-${money(T.t.discount)}</span></div>` : ''}
-    ${T.cOk && T.cDisc > 0 ? `<div class="sum disc"><span>Cupón ${esc(couponRes.code)}</span><span>-${money(T.cDisc)}</span></div>` : ''}
-    ${extra.map((b) => `<div class="sum disc"><span>${esc(b)}</span><span></span></div>`).join('')}
-    <div class="sum total"><span>${cOpt ? 'Productos' : 'Total'}</span><b>${money(T.total)}</b></div>
-    ${cOpt ? `<div class="sum"><span>Envío ${esc(cOpt.carrier)} · ${esc(cOpt.service)}</span><span>${cCost === 0 ? 'Gratis' : money(cCost)}</span></div><div class="sum total"><span>Total con envío</span><b>${money(T.total + cCost)}</b></div>` : (envio ? `<div class="sum"><span>Envío estimado · no incluido</span><span>${shipTxt}</span></div>` : '')}
-    <button class="btn" data-cact="send" style="margin-top:6px" ${sending ? 'disabled' : ''}>${sending ? 'Mandando…' : 'Mandar pedido'}</button>
-    ${S().payReady ? `<button class="btn wa" data-cact="pay" style="margin-top:8px" ${sending ? 'disabled' : ''}>Terminar pedido (pagar con Mercado Pago)</button>` : ''}
-    <p class="small">${S().payReady ? (cOpt ? '"Mandar pedido" lo guarda y te escribimos por WhatsApp para coordinar el pago. "Terminar pedido" te lleva a pagar los productos y el envío con Mercado Pago.' : '"Mandar pedido" lo guarda y te escribimos por WhatsApp para terminar todo. "Terminar pedido" te lleva a pagar los productos con Mercado Pago: el envío no está incluido y se coordina aparte por WhatsApp.') : 'Después de mandarlo, te escribimos por WhatsApp para confirmar todo.'}</p>`;
-}
-
-/* ---------- cupón ---------- */
 function couponItems() {
   return cart.map((c) => ({ pid: c.pid, sel: c.sel, qty: c.qty, note: c.note }));
 }
+
 function scheduleCoupon() {
   clearTimeout(couponTimer);
   couponTimer = setTimeout(checkCoupon, 250);
 }
+
 async function checkCoupon() {
   if (!form.coupon || !cart.length) return;
   const my = ++couponReq;
@@ -919,8 +1021,9 @@ async function checkCoupon() {
   if (my !== couponReq) return;
   couponBusy = false;
   couponRes = res;
-  renderCoupon(); renderCartFoot();
+  renderCoupon(); renderCart();
 }
+
 async function applyCoupon() {
   const inp = $('#fCoupon');
   const code = (inp ? inp.value : '').trim().toUpperCase().replace(/\s+/g, '');
@@ -941,188 +1044,66 @@ async function applyCoupon() {
   if (res.ok) { couponRes = res; couponMsg = ''; persistForm(); toast('Cupón aplicado'); }
   else { form.coupon = ''; couponRes = null; couponMsg = res.message || 'No se pudo aplicar el cupón.'; couponOpen = true; }
   persistForm();
-  renderCoupon(); renderCartFoot();
-}
-
-/* ---------- envío por correo (Andreani / Correo Argentino) ---------- */
-function autoPickCarrier() {
-  // Fuera de Mendoza no hay envío propio: se deja elegida la opción de correo más barata
-  if (ship && ship.reason === 'outside' && carriers && carriers.options && carriers.options.length && !carrierOption()) shipOpt = carriers.options[0].id;
-}
-async function calcCarriers() {
-  if (!carReady() || form.delivery !== 'envio') return;
-  const cp = form.cp.trim();
-  if (!/^\d{4}$/.test(cp) || !cart.length) { carriers = null; renderCarriers(); return; }
-  carriers = { cp, loading: true, options: [], errors: [] }; renderCarriers();
-  let j;
-  try {
-    const r = await fetch('/api/shipping/carriers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cp, items: couponItems() }) });
-    j = await r.json();
-  } catch { j = { ok: false, message: 'No pudimos consultar los correos ahora.' }; }
-  if (form.cp.trim() !== cp) return;
-  carriers = { cp, loading: false, options: j.ok ? j.options : [], errors: j.ok ? j.errors : [], message: j.ok ? '' : j.message };
-  if (shipOpt !== 'own' && !carrierOption()) shipOpt = 'own';
-  autoPickCarrier();
-  renderCarriers(); renderCartFoot();
-}
-const scheduleCarriers = () => { clearTimeout(carTimer); carTimer = setTimeout(calcCarriers, 400); };
-function renderCarriers() {
-  const el = $('#carrierOpts');
-  if (!el) return;
-  if (!carReady() || form.delivery !== 'envio' || !carriers) { el.innerHTML = ''; return; }
-  if (carriers.loading) { el.innerHTML = '<div class="ship-msg" style="color:var(--muted)">Buscando precios de envío por correo…</div>'; return; }
-  const T = totals();
-  const rows = [];
-  if (ship && ship.ok) {
-    const c = T.freeShip ? 'Gratis' : money(ship.cost);
-    rows.push(`<label class="opt ${shipOpt === 'own' ? 'on' : ''}"><input type="radio" name="shipopt" value="own" ${shipOpt === 'own' ? 'checked' : ''}><span><b>Envío propio (Mendoza)</b><br><small>Lo coordinamos por WhatsApp</small></span><b class="opr">${c}</b></label>`);
-  }
-  for (const o of carriers.options) {
-    const svc = String(o.service || '').split(' · ')[0];   // 'A sucursal' / 'A domicilio' (el nombre del correo ya está en la marca)
-    rows.push(`<label class="opt ${shipOpt === o.id ? 'on' : ''}"><input type="radio" name="shipopt" value="${esc(o.id)}" ${shipOpt === o.id ? 'checked' : ''}><span><b>${esc(o.carrier)} · ${esc(svc)}</b><br><small>${o.days ? esc(o.days) + ' · ' : ''}Se paga junto con el pedido${o.note ? ' · ' + esc(o.note) : ''}</small></span><b class="opr">${T.freeShip ? 'Gratis' : money(o.price)}</b></label>`);
-  }
-  let msg = '';
-  if (!carriers.options.length) msg = carriers.message || (carriers.errors.length ? 'No pudimos consultar los correos ahora. Probá de nuevo en un rato.' : 'No hay envíos por correo disponibles para ese código postal.');
-  else if (carriers.errors.length) msg = `No pudimos consultar ${carriers.errors.join(' ni ')} ahora.`;
-  el.innerHTML = `<div class="field"><label class="l">¿Cómo lo enviamos?</label>${rows.join('')}${msg ? `<div class="ship-msg warn">${esc(msg)}</div>` : ''}</div>`;
-}
-
-/* ---------- envío estimado ---------- */
-async function calcShip() {
-  const cp = form.cp.trim();
-  const box = $('#shipMsg');
-  // Si el formulario no está en pantalla (por ejemplo, justo después de mandar el pedido), no hay nada que dibujar.
-  if (!box) return;
-  if (!/^\d{4}$/.test(cp)) { ship = { ok: false, reason: 'invalid', cp, message: 'Ingresá un código postal de 4 números.' }; box.innerHTML = shipMsgHtml(); return; }
-  ship = { loading: true, cp };
-  box.innerHTML = shipMsgHtml();
-  calcCarriers();
-  try {
-    const r = await fetch('/api/shipping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cp }) });
-    const j = await r.json();
-    if (form.cp !== cp) return;
-    ship = Object.assign({ cp }, j);
-  } catch {
-    ship = { ok: false, reason: 'net', cp, message: 'No pudimos calcular el envío ahora. Igual podés enviar el pedido y te lo confirmamos por WhatsApp.' };
-  }
-  const b2 = $('#shipMsg');
-  if (b2) b2.innerHTML = shipMsgHtml();
-  autoPickCarrier();
-  renderCarriers();
-  renderCartFoot();
-}
-
-/* ---------- eventos del carrito ---------- */
-function onCartInput(e) {
-  const t = e.target;
-  if (t.id === 'fName') form.name = t.value;
-  else if (t.id === 'fAddr') form.address = t.value;
-  else if (t.id === 'fPhone') form.phone = t.value;
-  else if (t.id === 'fDate') { form.needed = t.value; renderDateHint(); }
-  else if (t.id === 'fCoupon') { t.value = t.value.toUpperCase().replace(/\s+/g, ''); return; }
-  else if (t.id === 'fCp') {
-    t.value = t.value.replace(/\D/g, '').slice(0, 4);
-    form.cp = t.value;
-    if (ship && ship.cp !== form.cp) { ship = null; carriers = null; shipOpt = 'own'; const b = $('#shipMsg'); if (b) b.innerHTML = ''; renderCarriers(); renderCartFoot(); }
-    if (/^\d{4}$/.test(form.cp)) { clearTimeout(cpTimer); cpTimer = setTimeout(calcShip, 500); }
-  } else if (t.name === 'shipopt' && e.type === 'change') {
-    shipOpt = t.value; renderCarriers(); renderCartFoot();
-  } else if (t.name === 'deliv' && e.type === 'change') {
-    form.delivery = t.value;
-    persistForm();
-    renderForm(); renderCartFoot();
-    return;
-  }
-  persistForm();
+  renderCoupon(); renderCart();
 }
 
 function onCartClick(e) {
   const b = e.target.closest('[data-cact]');
   if (!b) return;
-  const a = b.dataset.cact;
-  const item = cart.find((c) => c.id === b.dataset.id);
+  const a = b.dataset.cact, id = b.dataset.id;
   if (a === 'close') return closeCart();
-  if (a === 'ship') return calcShip();
-  if (a === 'send') return sendOrder();
-  if (a === 'pay') return sendOrder(true);
+  if (a === 'clear') return askClearCart();
+  if (a === 'inc' || a === 'dec' || a === 'rm') {
+    const it = cart.find((c) => c.id === id);
+    if (!it) return;
+    if (a === 'inc') it.qty = Math.min(99, it.qty + 1);
+    if (a === 'dec') it.qty -= 1;
+    if (a === 'rm' || it.qty < 1) cart = cart.filter((c) => c.id !== id);
+    return cartChanged();
+  }
   if (a === 'cpnopen') { couponOpen = true; renderCoupon(); const i = $('#fCoupon'); if (i) i.focus(); return; }
   if (a === 'applycoupon') return applyCoupon();
   if (a === 'rmcoupon') { form.coupon = ''; couponRes = null; couponOpen = false; couponMsg = ''; couponReq++; persistForm(); renderCoupon(); renderCartFoot(); return; }
-  if (a === 'inc' && item) item.qty = Math.min(99, item.qty + 1);
-  else if (a === 'dec' && item) { item.qty -= 1; if (item.qty <= 0) cart = cart.filter((c) => c !== item); }
-  else if (a === 'rm' && item) cart = cart.filter((c) => c !== item);
-  else if (a === 'clear') { askClearCart(); return; }
-  else return;
-  cartChanged();
-}
-
-/* ---------- pedido por WhatsApp ---------- */
-function showDone(sh) {
-  $('#drawer').innerHTML = `<button class="drawer-close" data-cact="close" aria-label="Cerrar">×</button>
-    <div class="drawer-head"><h2>¡Pedido enviado!</h2></div>
-    <div class="drawer-body"><div class="done"><div class="ok" aria-hidden="true">✓</div>
-      <h3>Tu pedido ya fue mandado</h3>
-      <p>Nos comunicamos por <b>WhatsApp</b> al <b>${esc(form.phone)}</b> para terminar con todo.</p>
-      ${sh ? `<p>El envío con <b>${esc(sh.carrier)}</b> (${sh.cost === 0 ? 'gratis' : money(sh.cost)}) se paga junto con el pedido: te escribimos para coordinar el pago.</p>` : ''}
-      <p class="small">Ahí confirmamos tu pedido, el envío y cómo seguimos.</p></div></div>
-    <div class="drawer-foot"><button class="btn" data-cact="close">Seguir mirando</button></div>`;
-}
-
-let lastOrder = null;   // pedido mandado en esta visita: { id, token }
-
-async function sendOrder(thenPay) {
-  if (!cart.length || sending) return;
-  const focus = (id) => { const i = $(id); if (i) i.focus(); };
-  if (!form.name.trim()) { toast('Escribí tu nombre'); return focus('#fName'); }
-  if (form.phone.replace(/\D/g, '').length < 8) { toast('Escribí tu número de WhatsApp'); return focus('#fPhone'); }
-  if (form.delivery === 'envio') {
-    if (!/^\d{4}$/.test(form.cp.trim())) { toast('Ingresá tu código postal'); return focus('#fCp'); }
-    if (ship && ship.reason === 'outside' && !(carReady() && carrierOption())) { toast(carReady() ? 'Elegí cómo querés que lo enviemos' : 'Solo enviamos dentro de Mendoza'); return; }
-    if (shipOpt !== 'own' && !carrierOption()) { toast('Esperá un segundo: estamos calculando el envío'); return; }
-    if (!form.address.trim()) { toast('Escribí tu dirección'); return focus('#fAddr'); }
+  if (a === 'hacer') {
+    ck.step = 'datos'; renderCart();
+    if (form.delivery === 'envio') refreshShipping();
+    return;
   }
-  if (form.needed && form.needed < minNeeded()) { toast('Elegí otra fecha: tus productos necesitan más anticipación'); return focus('#fDate'); }
-  if (form.coupon && couponBusy) { toast('Verificando el cupón, esperá un segundo'); return; }
+  if (a === 'volver') { ck.step = 'cart'; renderCart(); return; }
+  if (a === 'mandar') return sendCart();
+}
 
-  const T = totals();
-  const payload = {
-    name: form.name.trim(), phone: form.phone, items: couponItems(), coupon: T.cOk ? couponRes.code : '', token: orderToken,
-    delivery: form.delivery, cp: form.cp, address: form.address, neededFor: form.needed || '',
-    shipEstimate: form.delivery === 'envio' && ship && ship.ok && !T.freeShip && !carrierOption() ? ship.cost : null,
-    shipOpt: form.delivery === 'envio' && carrierOption() ? shipOpt : '', vid, sid,
-  };
-  sending = true; renderCartFoot();
-  let res;
-  try {
-    const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    res = await r.json();
-  } catch { res = { ok: false, message: 'No pudimos conectarnos. Probá de nuevo.' }; }
-  sending = false;
-  if (!res.ok) { toast(res.message || 'No se pudo mandar el pedido'); renderCartFoot(); if (res.field === 'phone') focus('#fPhone'); return; }
+function onCartInput(e) {
+  const t = e.target;
+  if (t.id === 'ckName') form.name = t.value;
+  else if (t.id === 'ckLast') form.last = t.value;
+  else if (t.id === 'ckPhone') form.phone = t.value;
+  else if (t.id === 'ckAddr') form.address = t.value;
+  else if (t.id === 'fCoupon') { t.value = t.value.toUpperCase().replace(/\s+/g, ''); return; }
+  else if (t.id === 'ckCp') {
+    t.value = t.value.replace(/\D/g, '').slice(0, 4);
+    if (form.cp !== t.value) { form.cp = t.value; form.shipOpt = ''; ck.ship = null; ck.quote = null; }
+    persistForm();
+    if (/^\d{4}$/.test(t.value)) refreshShipping(); else paintShipping();
+    return;
+  } else if (t.id === 'ckProv') {
+    form.province = t.value; form.shipOpt = ''; ck.ship = null; ck.quote = null;
+    persistForm(); renderCart();
+    if (form.province && /^\d{4}$/.test(form.cp)) refreshShipping();
+    return;
+  } else if (t.name === 'ckDeliv') {
+    form.delivery = t.value; persistForm(); renderCart();
+    if (form.delivery === 'envio' && form.province && /^\d{4}$/.test(form.cp)) refreshShipping();
+    return;
+  } else if (t.name === 'ckOpt') {
+    form.shipOpt = t.value; persistForm(); paintShipping();
+    return;
+  } else return;
   persistForm();
-  lastOrder = { id: res.id, token: orderToken };
-  if (thenPay) return payOrder(lastOrder);
-  const shDone = carrierOption() && res.shipCost !== null && res.shipCost !== undefined ? { carrier: carrierOption().carrier, cost: res.shipCost } : null;
-  cart = []; orderToken = uid(); persist(); renderCartBadge();
-  carriers = null; shipOpt = 'own';
-  showDone(shDone);
+  paintShipping();
 }
 
-async function payOrder(o) {
-  sending = true; renderCartFoot();
-  let r;
-  try {
-    const x = await fetch(`/api/orders/${o.id}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: o.token }) });
-    r = await x.json();
-  } catch { r = { ok: false, message: 'No pudimos conectarnos. Probá de nuevo.' }; }
-  sending = false;
-  if (r.paid) { cart = []; orderToken = uid(); persist(); renderCartBadge(); return toast(r.message); }
-  if (!r.ok || !r.url) { toast(r.message || 'No pudimos abrir el pago.'); renderCartFoot(); return; }
-  cart = []; orderToken = uid(); persist(); renderCartBadge();
-  location.href = r.url;     // a Mercado Pago
-}
-
-/* Al volver de Mercado Pago: se muestra el resultado. La confirmación real llega por el aviso de Mercado Pago. */
+/* Al volver de Mercado Pago: se muestra el resultado (la confirmación real llega por el aviso de Mercado Pago). */
 function checkReturnFromPay() {
   const p = new URLSearchParams(location.search);
   const st = p.get('pago'), id = p.get('pedido');
@@ -1139,7 +1120,8 @@ function checkReturnFromPay() {
     <div class="drawer-foot"><button class="btn" data-cact="close">Listo</button></div>`;
 }
 
-/* ---------- eventos globales ---------- */
+
+
 function wireGlobal() {
   document.addEventListener('click', (e) => {
     if (e.target.closest('#openCart')) return openCart();
@@ -1183,10 +1165,9 @@ function wireGlobal() {
   $('#drawer').addEventListener('input', onCartInput);
   $('#drawer').addEventListener('change', onCartInput);
   $('#drawer').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.target.id === 'fCoupon') { e.preventDefault(); applyCoupon(); }
-    if (e.key === 'Enter' && e.target.id === 'fCp') { e.preventDefault(); calcShip(); }
   });
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'fCoupon') { e.preventDefault(); applyCoupon(); return; }
     if (e.key !== 'Escape') return;
     if (!$('#sheet').hidden) closeProduct();
     else if (!$('#drawer').hidden) closeCart();

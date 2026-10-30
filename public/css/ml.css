@@ -71,26 +71,6 @@ body { background: var(--bg); color: var(--ink); font-family: var(--display); }
 .cat { border: 0; background: transparent; color: #555; padding: 8px 13px; border-radius: 4px; font-weight: 500; }
 .cat:hover { background: #f5f5f5; }
 .cat[aria-selected="true"] { background: var(--p-soft); color: var(--p-dark); font-weight: 700; }
-.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-@media (min-width: 640px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 900px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (min-width: 1200px) { .grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-.card { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; text-align: left; padding: 0; border: 0; background: #fff; border-radius: 6px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .04), 0 1px 2px rgba(0, 0, 0, .12); overflow: hidden; transition: box-shadow .15s, transform .15s; }
-.card:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 6px 18px rgba(0, 0, 0, .16); transform: translateY(-1px); }
-.card .ph { aspect-ratio: 1 / 1; border-radius: 0; background: #fff; border-bottom: 1px solid #f0f0f0; }
-.card .cbody { padding: 12px 12px 14px; flex: 1; display: flex; flex-direction: column; }
-.card .ph { flex: none; width: 100%; }
-.card h3 { font-family: var(--display); font-weight: 400; font-size: .95rem; line-height: 1.3; color: #333; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.6em; }
-.card .price { color: #333; margin-top: auto; padding-top: 4px; min-height: 3.5em; display: flex; flex-direction: column; justify-content: flex-end; }
-.card .price s { display: block; font-size: .8rem; color: #999; margin: 0; }
-.card .price .now { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; }
-.card .price .now small { font-size: .74rem; color: #777; }
-.card .price b { font-size: 1.4rem; font-weight: 400; color: #333; letter-spacing: -.01em; }
-.card .price .off { font-size: .8rem; font-weight: 600; color: var(--ok); }
-.card .ship-tag { margin-top: 8px; font-size: .78rem; font-weight: 700; color: var(--ok); }
-.card .lead { margin-top: 6px; }
-.tag-pin { position: absolute; top: 8px; left: 8px; background: var(--p); color: var(--on-p); font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 3px; padding: 3px 7px; }
-.heart { top: 8px; right: 8px; }
 
 /* ---------- bloques de abajo (sobre mí, mayoristas, reseñas) como tarjetas ---------- */
 .about, .wholesale, .reviews { width: min(1280px, 100% - 24px); margin: 12px auto; background: #fff !important; border: 0; border-radius: 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); padding: 26px 0; }
@@ -129,3 +109,27 @@ body { background: var(--bg); color: var(--ink); font-family: var(--display); }
 /* el aviso de "agregado" flota arriba del carrito, sin tapar el pie ni los botones */
 .toast { top: 74px; bottom: auto !important; transform: translate(-50%, -8px); }
 .toast.show { transform: translate(-50%, 0); }
+
+/* ---------- carrito (en dos pasos) ---------- */
+.ck-items { list-style: none; margin: 0; padding: 0; }
+.ck-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #eee; }
+.ck-info { display: flex; flex-direction: column; min-width: 0; }
+.ck-info b { font-weight: 600; overflow-wrap: anywhere; }
+.ck-info span { color: #444; font-size: .95rem; margin-top: 2px; }
+.ck-info s { color: #999; font-size: .85rem; margin-right: 4px; }
+.ck-qty { display: flex; align-items: center; gap: 6px; flex: none; }
+.ck-qty button { width: 32px; height: 32px; border: 1.5px solid var(--line); background: #fff; border-radius: 8px; font-size: 1.1rem; line-height: 1; color: var(--ink); }
+.ck-qty b { min-width: 22px; text-align: center; }
+.ck-qty .ck-rm { width: auto; height: auto; border: 0; background: none; padding: 4px 6px; margin-left: 4px; font-size: .8rem; color: var(--bad); text-decoration: underline; }
+.ck-clear { margin-top: 14px; border: 0; background: none; color: var(--muted); text-decoration: underline; font-size: .9rem; padding: 4px 0; }
+.ck-back { border: 0; background: none; color: var(--p-dark); font-weight: 700; padding: 4px 0; margin-right: 8px; }
+.ck-lead { display: flex; gap: 8px; align-items: center; margin-top: 10px; padding: 10px 12px; background: var(--p-soft); border-radius: 10px; font-size: .92rem; }
+.ck-lead svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ck-lead b { color: var(--p-dark); }
+
+/* etiquetas sobre la foto del producto (descuento arriba a la izquierda; destacado abajo, como lo ubica reviews.css) */
+.card .ph .tag-off { position: absolute; top: 8px; left: 8px; background: #fff; color: var(--p-dark); font-size: .72rem; font-weight: 800; padding: 3px 7px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.2); z-index: 2; }
+.card .ph .tag-pin { position: absolute; background: var(--p); color: #fff; font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; z-index: 2; }
+
+/* selector de provincia con el mismo aspecto que los campos */
+.drawer select { width: 100%; border: 1.5px solid var(--line); border-radius: 10px; padding: 11px 12px; background: #fff; font-size: 16px; color: var(--ink); font-family: var(--display); }

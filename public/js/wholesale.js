@@ -71,7 +71,7 @@ async function init() {
       <div class="wsp-head"><h1>Trabajá como mayorista</h1>
         <p>Si tenés un emprendimiento o un negocio y querés comprar flores de cinta de raso en cantidad, completá tus datos y nos ponemos en contacto.</p></div>
       <div class="wsp-info">
-        <div><i>1</i><span>Compra mínima: <b>${min} flores por mes</b>.</span></div>
+        <div><i>1</i><span>Te mandamos toda la información por WhatsApp.</span></div>
         <div><i>2</i><span>Cuando envíes la solicitud te escribimos por <b>WhatsApp</b>: ahí te pasamos los <b>precios de las flores para compras mayores</b> y charlamos todo.</span></div>
         <div><i>3</i><span>También te mandamos la información a tu email.</span></div>
       </div>
@@ -156,7 +156,7 @@ async function init() {
       <div class="ok" aria-hidden="true">✓</div>
       <h1>¡Recibimos tu solicitud!</h1>
       <p>Te vamos a escribir por <b>WhatsApp</b> al número que dejaste (<b>${esc(b.phone)}</b>).</p>
-      <p>Ahí te pasamos los <b>precios de las flores para compras mayores</b> (compra mínima: <b>${min} flores por mes</b>) y charlamos todo.</p>
+      <p>Ahí te pasamos los <b>precios de las flores para compras mayores</b> y charlamos todo.</p>
       <p>También te mandamos la información a <b>${esc(b.email)}</b>.</p>
       <a class="btn" href="/">Volver a la tienda</a></div>`;
     window.scrollTo(0, 0);
