@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #09090B;
+  --surface: #18181B;
+  --card: #1C1C1F;
+  --border: #27272A;
+  --border-hover: #3F3F46;
+  --text: #FAFAFA;
+  --muted: #A1A1AA;
+  --subtle: #52525B;
+  --blue: #2563EB;
+  --blue-light: #3B82F6;
+  --blue-dim: #1E3A5F;
+  --blue-text: #DBEAFE;
+  --green: #22C55E;
+  --green-dim: #14532D;
+  --yellow: #EAB308;
+  --yellow-dim: #422006;
+  --red: #EF4444;
+  --red-dim: #450A0A;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Scroll reveal — solo fade, sin slide. Una sola vez por sección */
+.reveal {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.reveal.in { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transition: none; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Focus */
+*:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Dot pulsante del badge hero */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.blink { animation: blink 2s ease infinite; }
