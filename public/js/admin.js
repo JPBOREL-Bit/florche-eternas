@@ -586,6 +586,12 @@ function viewStore() {
       <div class="field"><label class="l">Dirección de tu Umami</label><input type="text" data-s="umamiHost" value="${esc(s.umamiHost || '')}" placeholder="https://cloud.umami.is"><p class="hint">Umami Cloud o tu propio servidor. Sin cookies. Dejalo vacío si no lo usás.</p></div>
       <div class="field"><label class="l">ID del sitio en Umami</label><input type="text" data-s="umamiId" value="${esc(s.umamiId || '')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"><p class="hint">Lo copiás de Umami al agregar el sitio.</p></div>
       ${f('footerText', 'Texto al pie de la página')}
+      <h3 style="margin:16px 0 8px;font-size:1rem">Datos legales del negocio</h3>
+      <p class="hint" style="margin-top:-4px">Aparecen en el pie de la tienda y en las páginas de términos, privacidad y cambios. Son obligatorios para vender online.</p>
+      ${f('legalName', 'Razón social o nombre del titular')}
+      ${f('legalCuit', 'CUIT')}
+      ${f('legalAddress', 'Domicilio')}
+      ${f('legalEmail', 'Email de contacto')}
       <div class="field"><label class="l">Color principal</label><div class="row"><input type="color" data-s="primaryColor" value="${esc(s.primaryColor)}" style="width:60px;height:40px;padding:2px;border:1.5px solid var(--line);border-radius:9px"><span class="hint">Cambia botones, cinta y detalles de toda la tienda.</span></div></div>
       <div class="field"><label class="l">Logo (opcional)</label>
         <div class="row">${s.logoId ? `<img class="logo-prev" src="/img/${s.logoId}" alt="">` : ''}

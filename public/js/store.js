@@ -356,9 +356,16 @@ function renderFoot() {
     links.push(`<a href="${esc(h)}" target="_blank" rel="noopener">Instagram</a>`);
   }
   if (s.whatsapp) links.push(`<a href="https://wa.me/${esc(s.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>`);
+  links.push('<a href="/terminos">Términos y condiciones</a>', '<a href="/privacidad">Privacidad</a>', '<a href="/cambios-y-arrepentimiento">Cambios y arrepentimiento</a>');
   $('#foot').innerHTML = `<div class="name">${esc(s.storeName)}</div>
     ${links.length ? `<div class="links">${links.join('')}</div>` : ''}
     <small>${esc(s.footerText)}</small>`;
+  const legalBits = [];
+  if (s.legalName) legalBits.push(esc(s.legalName));
+  if (s.legalCuit) legalBits.push('CUIT ' + esc(s.legalCuit));
+  if (s.legalAddress) legalBits.push(esc(s.legalAddress));
+  if (s.legalEmail) legalBits.push(`<a href="mailto:${esc(s.legalEmail)}">${esc(s.legalEmail)}</a>`);
+  if (legalBits.length) $('#foot').insertAdjacentHTML('beforeend', `<div class="legal-data">${legalBits.join(' · ')}</div>`);
 }
 
 /* ---------- ficha de producto ---------- */

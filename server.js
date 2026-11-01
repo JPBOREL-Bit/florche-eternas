@@ -81,6 +81,11 @@ const DEFAULT_SETTINGS = {
   // Umami (análisis sin cookies). Vacío = apagado. host = dirección de tu Umami (Cloud o autoalojado), id = ID del sitio.
   umamiHost: '',
   umamiId: '',
+  // Datos legales del negocio (se muestran en el pie y en las páginas legales)
+  legalName: '',
+  legalCuit: '',
+  legalAddress: '',
+  legalEmail: '',
   // Mayoristas
   wholesaleOn: true,
   wholesaleMin: 20,
@@ -1038,6 +1043,7 @@ const carriersApi = require('./lib/carriers.js');
 ctx.carriers = carriersApi;
 carriersApi.mount(ctx);
 require('./lib/payments.js').mount(ctx);
+require('./lib/legal.js').mount(ctx);
 const revApi = reviewsLib.mount(ctx);
 require('./lib/coupons.js').mount(ctx);
 require('./lib/orders.js').mount(ctx);
