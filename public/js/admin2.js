@@ -126,6 +126,36 @@ FL.views.orders = async function () {
   pollOnce();
 };
 
+// Mensaje de WhatsApp para el cliente: trae el pedido completo y cambia según envío/retiro y si ya pagó.
+// No lleva número de pedido (el cliente no lo conoce).
+function waOrderText(o) {
+  const first = String(o.name || '').split(' ')[0] || '';
+  const lines = (o.items || []).map((i) => `• ${i.qty}× ${i.name}${(i.lines || []).length ? ' (' + i.lines.join(' · ') + ')' : ''}${i.note ? ' — ' + i.note : ''}`);
+  const paid = !!o.paid;
+  const parts = [`Hola${first ? ' ' + first : ''}! Te escribo por tu pedido de Florche:`, '', ...lines, '', `Total de las flores: ${money(o.total)}`];
+  if (o.delivery === 'envio') {
+    parts.push(`Envío a domicilio: ${o.address || ''}${o.cp ? ' (CP ' + o.cp + ')' : ''}`);
+    if (o.ship_carrier) {
+      const sc = o.ship_cost != null ? money(o.ship_cost) : 'a confirmar';
+      parts.push(`Envío ${o.ship_carrier}${o.ship_service ? ' · ' + o.ship_service : ''}: ${sc}${paid && o.ship_cost != null && Number(o.ship_cost) > 0 ? ' (incluido en el pago)' : ''}`);
+    } else if (o.ship_estimate != null) {
+      parts.push(`Envío aproximado: ${money(o.ship_estimate)}${paid ? ' (no está incluido en el pago)' : ''}`);
+    } else {
+      parts.push('Envío: lo confirmamos por WhatsApp');
+    }
+  } else {
+    parts.push('Retiro en persona (a coordinar).');
+  }
+  if (o.needed_for) parts.push(`Lo necesitás para el ${o.needed_for.split('-').reverse().join('/')}.`);
+  if (paid) parts.push('Ya pagaste el pedido con Mercado Pago. ✅');
+  if (o.delivery === 'envio') {
+    parts.push(paid ? 'Ya está todo listo para el envío: te escribo para coordinar la entrega.' : '¿Lo confirmamos así?');
+  } else {
+    parts.push('Coordinemos el día y horario del retiro: ¿qué días y horarios te quedan bien?');
+  }
+  return parts.join('\n');
+}
+
 function orderCard(o, isNew) {
   const items = o.items.map((i) => `<li><b>${i.qty}× ${esc(i.name)}</b> — ${money(i.line)}${(i.lines || []).length ? `<div class="sub">${i.lines.map(esc).join(' · ')}</div>` : ''}${i.note ? `<div class="sub">Aclaración: ${esc(i.note)}</div>` : ''}</li>`).join('');
   const deliv = o.delivery === 'retiro' ? 'Retiro en persona'
@@ -140,7 +170,7 @@ function orderCard(o, isNew) {
     <div class="ometa">${fdate(o.created_at)} · ${deliv}</div>
     ${o.ship_carrier ? `<div class="oextra">Envío por correo: <b>${esc(o.ship_carrier)} · ${esc(o.ship_service)}</b> · ${Number(o.ship_cost) > 0 ? money(o.ship_cost) : 'gratis'}${o.ship_days ? ' · ' + esc(o.ship_days) : ''}</div>` : ''}
     ${o.paid ? `<div class="oextra" style="color:var(--ok);font-weight:700">✓ Pagado con Mercado Pago${o.pay_amount ? ' · ' + money(o.pay_amount) : ''}</div>` : (o.pay_status && o.pay_status !== 'approved' ? `<div class="oextra">Pago: ${esc(o.pay_status)}</div>` : '')}
-    ${o.phone || o.needed_for ? `<div class="ometa">${o.phone ? `WhatsApp <b>+${esc(o.phone)}</b> <a class="btn sec sm" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}?text=${encodeURIComponent('Hola ' + String(o.name).split(' ')[0] + ', te escribimos por tu pedido #' + o.id + '.')}">Escribirle</a>` : ''}${o.needed_for ? ` ${o.phone ? '· ' : ''}Lo necesita para el <b>${esc(o.needed_for.split('-').reverse().join('/'))}</b>` : ''}</div>` : ''}
+    ${o.phone || o.needed_for ? `<div class="ometa">${o.phone ? `WhatsApp <b>+${esc(o.phone)}</b> <a class="btn sec sm" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}?text=${encodeURIComponent(waOrderText(o))}">Escribirle</a>` : ''}${o.needed_for ? ` ${o.phone ? '· ' : ''}Lo necesita para el <b>${esc(o.needed_for.split('-').reverse().join('/'))}</b>` : ''}</div>` : ''}
     <ul class="oitems">${items}</ul>
     ${extra.length ? `<div class="oextra">${extra.join(' · ')}</div>` : ''}
     <div class="ototal">Total del pedido <b>${money(o.total)}</b>${Number(o.ship_cost) > 0 ? ` + envío <b>${money(o.ship_cost)}</b> = <b>${money(Number(o.total) + Number(o.ship_cost))}</b>` : ''}</div>
