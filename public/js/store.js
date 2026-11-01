@@ -161,6 +161,7 @@ try {
 } catch { sid = uid(); newSession = true; }
 function track(type, pid, qty, extra) {
   if (noTrack) return;
+  try { if (window.umami && typeof umami.track === 'function') umami.track(type, { ...(pid ? { pid } : {}), ...(qty ? { qty } : {}), ...(extra || {}) }); } catch {}
   try {
     const body = JSON.stringify({ vid, sid, type, pid: pid || null, qty: qty || null, ...(extra || {}) });
     if (navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' }));
@@ -913,6 +914,7 @@ async function sendCart() {
   if (!res.ok) { toast(res.message || 'No se pudo mandar el pedido'); renderCart(); return; }
   persistForm();
   cart = []; orderToken = uid(); persist(); renderCartBadge();
+  track('order_sent', null, null, { delivery: payload.delivery, total: totals().total });
   ck.done = { id: res.id }; ck.step = 'cart'; ck.ship = null; ck.quote = null;
   renderCart();
 }
@@ -1048,6 +1050,7 @@ function onCartClick(e) {
   if (a === 'applycoupon') return applyCoupon();
   if (a === 'rmcoupon') { form.coupon = ''; couponRes = null; couponOpen = false; couponMsg = ''; couponReq++; persistForm(); renderCoupon(); renderCartFoot(); return; }
   if (a === 'hacer') {
+    track('checkout_start', null, cartCount());
     ck.step = 'datos'; renderCart();
     if (form.delivery === 'envio') refreshShipping();
     return;

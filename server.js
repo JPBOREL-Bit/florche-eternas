@@ -78,6 +78,9 @@ const DEFAULT_SETTINGS = {
   // Botón flotante de WhatsApp
   waFloatOn: true,
   waFloatText: 'Hola, tengo una consulta sobre sus flores',
+  // Umami (análisis sin cookies). Vacío = apagado. host = dirección de tu Umami (Cloud o autoalojado), id = ID del sitio.
+  umamiHost: '',
+  umamiId: '',
   // Mayoristas
   wholesaleOn: true,
   wholesaleMin: 20,
@@ -143,6 +146,8 @@ async function saveSettings(input) {
     } else {
       v = String(v ?? '').trim().slice(0, 5000);
       if (key === 'originCP' && !/^\d{4}$/.test(v)) throw new Error('El código postal de origen debe tener 4 números.');
+      if (key === 'umamiHost') { v = v.replace(/\/+$/, ''); if (v && !/^https:\/\/[a-z0-9.-]+(:\d+)?(\/[a-z0-9._~\/-]*)?$/i.test(v)) throw new Error('La dirección de Umami tiene que empezar con https:// (por ejemplo https://cloud.umami.is).'); }
+      if (key === 'umamiId' && v && !/^[a-z0-9-]{8,60}$/i.test(v)) throw new Error('El ID de Umami no es válido.');
       if (key === 'primaryColor' && !/^#[0-9a-fA-F]{6}$/.test(v)) throw new Error('Color inválido.');
       if (key === 'whatsapp') v = v.replace(/\D/g, '');
     }

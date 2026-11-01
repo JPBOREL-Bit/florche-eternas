@@ -582,6 +582,9 @@ function viewStore() {
       <h3 style="margin:16px 0 8px;font-size:1rem">Botón flotante de WhatsApp</h3>
       <label class="chk" style="margin-bottom:12px"><input type="checkbox" data-s="waFloatOn" ${s.waFloatOn ? 'checked' : ''}> Mostrar el botón flotante de WhatsApp en toda la tienda</label>
       <div class="field"><label class="l">Mensaje pre-cargado del botón</label><input type="text" data-s="waFloatText" value="${esc(s.waFloatText || '')}" placeholder="Hola, tengo una consulta sobre sus flores"><p class="hint">El cliente lo puede editar antes de enviar.</p></div>
+      <h3 style="margin:16px 0 8px;font-size:1rem">Análisis con Umami (opcional)</h3>
+      <div class="field"><label class="l">Dirección de tu Umami</label><input type="text" data-s="umamiHost" value="${esc(s.umamiHost || '')}" placeholder="https://cloud.umami.is"><p class="hint">Umami Cloud o tu propio servidor. Sin cookies. Dejalo vacío si no lo usás.</p></div>
+      <div class="field"><label class="l">ID del sitio en Umami</label><input type="text" data-s="umamiId" value="${esc(s.umamiId || '')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"><p class="hint">Lo copiás de Umami al agregar el sitio.</p></div>
       ${f('footerText', 'Texto al pie de la página')}
       <div class="field"><label class="l">Color principal</label><div class="row"><input type="color" data-s="primaryColor" value="${esc(s.primaryColor)}" style="width:60px;height:40px;padding:2px;border:1.5px solid var(--line);border-radius:9px"><span class="hint">Cambia botones, cinta y detalles de toda la tienda.</span></div></div>
       <div class="field"><label class="l">Logo (opcional)</label>

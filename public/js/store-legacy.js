@@ -161,6 +161,7 @@ try {
 } catch { sid = uid(); newSession = true; }
 function track(type, pid, qty, extra) {
   if (noTrack) return;
+  try { if (window.umami && typeof umami.track === 'function') umami.track(type, { ...(pid ? { pid } : {}), ...(qty ? { qty } : {}), ...(extra || {}) }); } catch {}
   try {
     const body = JSON.stringify({ vid, sid, type, pid: pid || null, qty: qty || null, ...(extra || {}) });
     if (navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' }));
@@ -1079,6 +1080,7 @@ async function sendOrder(thenPay) {
   const shDone = carrierOption() && res.shipCost !== null && res.shipCost !== undefined ? { carrier: carrierOption().carrier, cost: res.shipCost } : null;
   cart = []; orderToken = uid(); persist(); renderCartBadge();
   carriers = null; shipOpt = 'own';
+  track('order_sent', null, null, { delivery: form.delivery });
   showDone(shDone);
 }
 
