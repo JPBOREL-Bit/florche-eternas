@@ -748,7 +748,9 @@ function paintCheckout(d) {
     </div>
     <div class="drawer-foot">
       <div id="ckSum"></div>
-      <button class="btn" type="button" data-cact="mandar" ${ck.sending ? 'disabled' : ''}>${ck.sending ? 'Mandando…' : 'Mandar pedido'}</button>
+      ${S().payReady ? `<button class="btn wa" type="button" data-cact="pagar" ${ck.sending ? 'disabled' : ''}>Pagar con Mercado Pago</button>
+      <p class="small">Pagás los productos${isEnvio && form.province !== 'Mendoza' ? ' y el envío por correo' : ''} con Mercado Pago. ${isEnvio && form.province === 'Mendoza' ? 'El envío en Mendoza se coordina por WhatsApp. ' : ''}Si preferís, mandá el pedido y pagás después.</p>` : ''}
+      <button class="btn${S().payReady ? ' sec' : ''}" type="button" data-cact="mandar" ${ck.sending ? 'disabled' : ''}>${ck.sending ? 'Mandando…' : 'Mandar pedido'}</button>
     </div>`;
   paintShipping();
   renderCoupon();
@@ -877,7 +879,7 @@ function paintDone(d) {
     <div class="drawer-foot"><button class="btn" type="button" data-cact="close">Listo</button></div>`;
 }
 
-async function sendCart() {
+async function sendCart(thenPay) {
   if (ck.sending || !cart.length) return;
   const first = form.name.trim(), last = form.last.trim(), phone = form.phone.trim();
   const isEnvio = form.delivery === 'envio';
@@ -913,6 +915,7 @@ async function sendCart() {
   ck.sending = false;
   if (!res.ok) { toast(res.message || 'No se pudo mandar el pedido'); renderCart(); return; }
   persistForm();
+  if (thenPay) return payOrderNow(res.id, payload.token);
   cart = []; orderToken = uid(); persist(); renderCartBadge();
   track('order_sent', null, null, { delivery: payload.delivery, total: totals().total });
   ck.done = { id: res.id }; ck.step = 'cart'; ck.ship = null; ck.quote = null;
@@ -1056,7 +1059,8 @@ function onCartClick(e) {
     return;
   }
   if (a === 'volver') { ck.step = 'cart'; renderCart(); return; }
-  if (a === 'mandar') return sendCart();
+  if (a === 'mandar') return sendCart(false);
+  if (a === 'pagar') return sendCart(true);
 }
 
 function onCartInput(e) {
@@ -1087,6 +1091,23 @@ function onCartInput(e) {
   } else return;
   persistForm();
   paintShipping();
+}
+
+// Abre el cobro del pedido recién guardado. Si el cobro falla, el pedido igual queda guardado.
+async function payOrderNow(id, token) {
+  let r;
+  try {
+    r = await (await fetch(`/api/orders/${id}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })).json();
+  } catch { r = { ok: false, message: 'No pudimos conectarnos con Mercado Pago.' }; }
+  cart = []; orderToken = uid(); persist(); renderCartBadge();
+  if (r.paid) { toast(r.message || 'Ese pedido ya está pagado.'); ck.done = { id }; ck.step = 'cart'; ck.sending = false; return renderCart(); }
+  if (!r.ok || !r.url) {
+    // el pedido quedó guardado: se muestra la confirmación y el pago se coordina por WhatsApp
+    toast((r.message || 'No pudimos abrir el pago.') + ' Tu pedido quedó guardado.');
+    ck.done = { id }; ck.step = 'cart'; ck.sending = false; ck.ship = null; ck.quote = null;
+    return renderCart();
+  }
+  location.href = r.url;   // a Mercado Pago
 }
 
 /* Al volver de Mercado Pago: se muestra el resultado (la confirmación real llega por el aviso de Mercado Pago). */
